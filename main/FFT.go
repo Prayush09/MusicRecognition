@@ -7,6 +7,8 @@ import (
 	"github.com/mjibson/go-dsp/fft"
 )
 
+var RANGE = []int{40, 80, 120, 180, 300}
+
 func convertToFloat64(data []int16) []float64 {
 	dataFloat64 := make([]float64, len(data))
 	for i := 0; i < len(data); i++ {
@@ -42,6 +44,7 @@ type Peak struct {
 	TimeChunk int
 }
 
+// detect all local maxima
 func findPeaks(magnitudes []float64, threshold float64, binWidth float64, chunkIndex int) []Peak {
 	peaks := []Peak{}
 
@@ -62,41 +65,77 @@ func findPeaks(magnitudes []float64, threshold float64, binWidth float64, chunkI
 	return peaks
 }
 
+// find which band a frequency belongs to
+func findRange(freq int) int {
+	i := 0
+	for i < len(RANGE) && RANGE[i] < freq {
+		i++
+	}
+	if i >= len(RANGE) {
+		return RANGE[len(RANGE)-1] // clamp to last band if above range
+	}
+	return RANGE[i]
+}
 
-// what should be the return type of this function
-func FFT(allAudioData []int16) {
+// keep only the strongest peak per band per chunk
+func classifyPeaks(allPeaks [][]Peak) [][]Peak {
+	classified := make([][]Peak, len(allPeaks))
+
+	for i := 0; i < len(allPeaks); i++ {
+		bestPerBand := make(map[int]Peak)
+
+		for _, peak := range allPeaks[i] {
+			band := findRange(int(peak.Frequency))
+
+			best, exists := bestPerBand[band]
+			if !exists || peak.Magnitude > best.Magnitude {
+				bestPerBand[band] = peak
+			}
+		}
+
+		for _, p := range bestPerBand {
+			classified[i] = append(classified[i], p)
+		}
+	}
+
+	return classified
+}
+
+// main FFT driver
+func FFT(allAudioData []int16) [][]Peak {
 	totalChunk := 256
+	allPeaks := make([][]Peak, totalChunk)
+
+	// Bin width = sampleRate / FFT_size
+	sampleRate := 44100.0
+	fftSize := 1024.0
+	binWidth := sampleRate / fftSize
 
 	for i := 0; i < totalChunk; i++ {
 		chunk := getChunk(allAudioData, i)
 		fmt.Printf("Processing chunk %d, Size: %d\n", i, len(chunk))
 
-		//convert each of []int64 to []float64 for FFT conversion.
 		chunkFloat := convertToFloat64(chunk)
+		processedData := applyFFT(chunkFloat)
+		magnitudes := extractMagnitudes(processedData)
 
-		//apply fft function for each chunk
-		processed_Data := applyFFT(chunkFloat)
+		peaks := findPeaks(magnitudes, 50000.0, binWidth, i)
+		allPeaks[i] = peaks
+	}
 
-		//extract magnitutde:
-		magnitudes := extractMagnitudes(processed_Data)
-		fmt.Println("first five magnitues: ", magnitudes[:5])
+	// classify peaks into bands
+	classified := classifyPeaks(allPeaks)
 
-		//find peaks
-		peaks := findPeaks(magnitudes, 50000.0, 44100/1024, i)
-
-
-		if i%50 == 0 && len(peaks) > 0 {
-			fmt.Printf("Chunk %d peaks at frequencies: ", i)
-			for _, peak := range peaks[:5] {
-				fmt.Printf("Frequency: %f, Magnitude: %f\n", peak.Frequency, peak.Magnitude)
+	// Debug: print top peaks per chunk
+	for i, chunkPeaks := range classified {
+		if len(chunkPeaks) > 0 {
+			fmt.Printf("Chunk %d classified peaks:\n", i)
+			for _, p := range chunkPeaks {
+				fmt.Printf("  Band cutoff %dHz -> Freq %.2fHz, Mag %.2f\n",
+					findRange(int(p.Frequency)), p.Frequency, p.Magnitude)
 			}
 		}
-		/*
-			TODO:
-					1. Apply FFT
-						* Converting Time Domain data into frequency domain data
-					2. Extract magnitude
-					3. find peaks
-		*/
 	}
+
+	return classified
 }
