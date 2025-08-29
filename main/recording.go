@@ -9,7 +9,7 @@ import (
 	"github.com/gordonklaus/portaudio"
 )
 
-func main() {
+func Recording() []int16 {
 	err := portaudio.Initialize()
 	if err != nil {
 		log.Println("Port Audio failed to initialize!")
@@ -20,13 +20,13 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Required missing argument: Filename")
 		fmt.Println("Usage: go run recording.go <Filename.wav>")
-		return
+		return []int16{}
 	}
 
 	inputDevice, err := portaudio.DefaultInputDevice()
 	if err != nil {
 		log.Println("Failed to get default input device:", err)
-		return
+		return []int16{}
 	}
 
 	parameters := portaudio.HighLatencyParameters(inputDevice, nil)
@@ -37,7 +37,7 @@ func main() {
 	stream, err := portaudio.OpenStream(parameters, buffer)
 	if err != nil {
 		log.Println("Stream Parameters have not been set")
-		return
+		return []int16{}
 	}
 
 	err = stream.Start()
@@ -60,11 +60,14 @@ func main() {
 	stream.Stop()
 	fmt.Println("Total samples:", len(allAudioData))
 	fmt.Println("Starting FFT Processing")
-	FFT(allAudioData)
+	
+	
 
 	err = portaudio.Terminate()
 	if err != nil {
 		log.Println("Port Audio Termination has failed.")
 	}
 	fmt.Println("Terminated Port Audio Successfully!")
+
+	return allAudioData
 }
