@@ -38,11 +38,6 @@ func extractMagnitudes(fftData []complex128) []float64 {
 	return magnitudes
 }
 
-type Peak struct {
-	Frequency float64
-	Magnitude float64
-	TimeChunk int
-}
 
 // detect all local maxima
 func findPeaks(magnitudes []float64, threshold float64, binWidth float64, chunkIndex int) []Peak {
@@ -125,17 +120,6 @@ func FFT(allAudioData []int16) [][]Peak {
 
 	// classify peaks into bands
 	classified := classifyPeaks(allPeaks)
-
-	// Debug: print top peaks per chunk
-	for i, chunkPeaks := range classified {
-		if len(chunkPeaks) > 0 {
-			fmt.Printf("Chunk %d classified peaks:\n", i)
-			for _, p := range chunkPeaks {
-				fmt.Printf("  Band cutoff %dHz -> Freq %.2fHz, Mag %.2f\n",
-					findRange(int(p.Frequency)), p.Frequency, p.Magnitude)
-			}
-		}
-	}
 
 	return classified
 }

@@ -24,8 +24,8 @@ func main(){
 	fmt.Println("Constellation map created")
 
 	//hashing
-	hashing := GenerateHashes(constellationMap)
-	fmt.Println("Hashed Created")
+	hashes := GenerateHashes(constellationMap)
+	fmt.Println("Hashed Created: %d", hashes)
 
 	//TODO: Implement FlattenPeaks, CreateConstellationMap, GenerateHashes
 }
