@@ -26,6 +26,6 @@ func main(){
 	//hashing
 	hashes := GenerateHashes(constellationMap)
 	fmt.Println("Hashed Created: %d", hashes)
-
+	fmt.Println("Just a fun commit")
 	//TODO: Implement FlattenPeaks, CreateConstellationMap, GenerateHashes
 }
