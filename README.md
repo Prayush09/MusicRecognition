@@ -12,14 +12,14 @@ Implementation of an audio fingerprinting system similar to Shazam's algorithm f
 
 ## Implementation Steps
 
-### 1. Audio Recording and Storage ✅
-**Process**: Initialize() → Open Stream ✅ → Start() ✅ → Read data in loop → Stop() → Close() → Terminate() ✅
+### 1. Audio Recording and Storage 
+**Process**: Initialize() → Open Stream → Start() → Read data in loop → Stop() → Close() → Terminate() 
 
 **Status**: COMPLETED
 
 **Output**: Raw audio data stored in time-domain array slice (`[]int16`)
 
-### 2. Time-Domain to Frequency-Domain Conversion 🔄
+### 2. Time-Domain to Frequency-Domain Conversion 
 **Current Stage**: Our array now contains audio data in the time-domain form
 
 **Next Step**: Convert from time-domain to frequency-domain using Discrete Fourier Transform (FFT)
