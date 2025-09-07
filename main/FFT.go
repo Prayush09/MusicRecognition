@@ -106,7 +106,7 @@ func FFT(allAudioData []int16) [][]Peak {
 	fftSize := 1024.0
 	binWidth := sampleRate / fftSize
 
-	for i := 0; i < totalChunk; i++ {
+	for i := range totalChunk {
 		chunk := getChunk(allAudioData, i)
 		fmt.Printf("Processing chunk %d, Size: %d\n", i, len(chunk))
 
