@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Fingerprint Constellation Map</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23, #1a1a3a);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .file-input {
+            padding: 10px 15px;
+            background: linear-gradient(45deg, #00ffff, #0080ff);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .file-input:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.3);
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-left: auto;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .stat-label {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+        
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        
+        #constellation {
+            width: 100%;
+            height: 600px;
+            background: radial-gradient(circle at 50% 50%, #001122, #000511);
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .info-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #00ffff;
+            display: none;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Audio Fingerprint Constellation Map</h1>
+        
+        <div class="controls">
+            <input type="file" id="fileInput" accept=".json" class="file-input">
+            <label for="fileInput" class="file-input">Load Fingerprint Data</label>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="peakCount">0</div>
+                    <div class="stat-label">Peaks</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="pairCount">0</div>
+                    <div class="stat-label">Pairs</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="hashCount">0</div>
+                    <div class="stat-label">Hashes</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="constellation"></canvas>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #00ffff; box-shadow: 0 0 10px #00ffff;"></div>
+                    <span>Anchor Peaks</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #ff6b6b; box-shadow: 0 0 10px #ff6b6b;"></div>
+                    <span>Target Peaks</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: rgba(255, 255, 255, 0.3);"></div>
+                    <span>Connection Lines</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="infoPanel" class="info-panel">
+        <div id="infoContent"></div>
+    </div>
+    
+    <script>
+        class FingerprintVisualizer {
+            constructor() {
+                this.canvas = document.getElementById('constellation');
+                this.ctx = this.canvas.getContext('2d');
+                this.fileInput = document.getElementById('fileInput');
+                this.infoPanel = document.getElementById('infoPanel');
+                
+                this.peaks = [];
+                this.pairs = [];
+                this.fingerprints = [];
+                
+                this.setupCanvas();
+                this.setupEventListeners();
+                this.generateSampleData(); // For demo purposes
+            }
+            
+            setupCanvas() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = rect.height * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.canvas.style.width = rect.width + 'px';
+                this.canvas.style.height = rect.height + 'px';
+            }
+            
+            setupEventListeners() {
+                this.fileInput.addEventListener('change', (e) => this.loadFile(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                window.addEventListener('resize', () => this.setupCanvas());
+            }
+            
+            generateSampleData() {
+                // Generate sample data that looks like audio fingerprints
+                this.peaks = [];
+                this.pairs = [];
+                
+                // Create some realistic-looking peaks
+                const duration = 30; // 30 seconds
+                const maxFreq = 8000; // 8kHz
+                
+                for (let i = 0; i < 150; i++) {
+                    this.peaks.push({
+                        time: Math.random() * duration,
+                        frequency: Math.random() * maxFreq,
+                        magnitude: Math.random() * 50000 + 10000
+                    });
+                }
+                
+                // Create constellation pairs
+                for (let i = 0; i < this.peaks.length; i++) {
+                    const anchor = this.peaks[i];
+                    
+                    // Find nearby peaks to pair with
+                    for (let j = i + 1; j < this.peaks.length && j < i + 8; j++) {
+                        const target = this.peaks[j];
+                        const timeDelta = target.time - anchor.time;
+                        
+                        if (timeDelta > 0.1 && timeDelta < 2.0) {
+                            this.pairs.push({
+                                anchor: anchor,
+                                target: target,
+                                hash: Math.floor(Math.random() * 1000000)
+                            });
+                        }
+                    }
+                }
+                
+                this.updateStats();
+                this.draw();
+            }
+            
+            loadFile(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.processData(data);
+                    } catch (error) {
+                        alert('Error parsing JSON file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+            
+            processData(data) {
+                // Handle your specific JSON structure
+                this.fingerprints = data.fingerprints || [];
+                this.pairs = data.pairs || [];
+                this.peaks = data.peaks || [];
+                
+                // Normalize Go struct field names - your peaks have: Time, Frequency, Magnitude, TimeChunk
+                this.peaks = this.peaks.map(peak => ({
+                    time: peak.Time || 0,
+                    frequency: peak.Frequency || 0,
+                    magnitude: peak.Magnitude || 0,
+                    timeChunk: peak.TimeChunk || 0
+                }));
+                
+                // Normalize pairs - they should have Anchor and Target fields
+                this.pairs = this.pairs.map(pair => ({
+                    anchor: {
+                        time: pair.Anchor?.Time || 0,
+                        frequency: pair.Anchor?.Frequency || 0,
+                        magnitude: pair.Anchor?.Magnitude || 0,
+                        timeChunk: pair.Anchor?.TimeChunk || 0
+                    },
+                    target: {
+                        time: pair.Target?.Time || 0,
+                        frequency: pair.Target?.Frequency || 0,
+                        magnitude: pair.Target?.Magnitude || 0,
+                        timeChunk: pair.Target?.TimeChunk || 0
+                    },
+                    hash: pair.Hash || 0
+                }));
+                
+                console.log('✅ Successfully loaded your data!');
+                console.log('📊 Peaks:', this.peaks.length);
+                console.log('🔗 Pairs:', this.pairs.length);  
+                console.log('🔐 Fingerprints:', this.fingerprints.length);
+                console.log('📝 Sample peak:', this.peaks[0]);
+                console.log('🔗 Sample pair:', this.pairs[0]);
+                
+                // Check for valid data
+                if (this.peaks.length === 0) {
+                    console.error('❌ No peaks found in data!');
+                    alert('No peaks found in the uploaded file!');
+                    return;
+                }
+                
+                this.updateStats();
+                this.draw();
+            }
+            
+            updateStats() {
+                document.getElementById('peakCount').textContent = this.peaks.length;
+                document.getElementById('pairCount').textContent = this.pairs.length;
+                document.getElementById('hashCount').textContent = this.fingerprints.length;
+            }
+            
+            draw() {
+                const rect = this.canvas.getBoundingClientRect();
+                const width = rect.width;
+                const height = rect.height;
+                
+                // Clear canvas completely
+                this.ctx.fillStyle = 'rgba(0, 5, 17, 1)';
+                this.ctx.fillRect(0, 0, width, height);
+                
+                // If no real data loaded, show placeholder
+                if (!this.hasRealData && this.peaks.length === 0) {
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    this.ctx.font = '24px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('Upload your JSON file to see your constellation map!', width/2, height/2);
+                    return;
+                }
+                
+                if (this.peaks.length === 0) return;
+                
+                // Find bounds
+                const maxTime = Math.max(...this.peaks.map(p => p.time));
+                const maxFreq = Math.max(...this.peaks.map(p => p.frequency));
+                
+                console.log('📏 Data bounds:', { maxTime, maxFreq });
+                
+                const margin = 40;
+                const plotWidth = width - 2 * margin;
+                const plotHeight = height - 2 * margin;
+                
+                // Draw axes
+                this.drawAxes(margin, width, height, maxTime, maxFreq);
+                
+                // Draw constellation lines first (with better visibility)
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                this.ctx.lineWidth = 1.5;
+                this.pairs.forEach(pair => {
+                    const x1 = margin + (pair.anchor.time / maxTime) * plotWidth;
+                    const y1 = height - margin - (pair.anchor.frequency / maxFreq) * plotHeight;
+                    const x2 = margin + (pair.target.time / maxTime) * plotWidth;
+                    const y2 = height - margin - (pair.target.frequency / maxFreq) * plotHeight;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x1, y1);
+                    this.ctx.lineTo(x2, y2);
+                    this.ctx.stroke();
+                });
+                
+                // Draw peaks with better visibility
+                this.peaks.forEach((peak, index) => {
+                    const x = margin + (peak.time / maxTime) * plotWidth;
+                    const y = height - margin - (peak.frequency / maxFreq) * plotHeight;
+                    
+                    // Check if this peak is an anchor or target
+                    const isAnchor = this.pairs.some(pair => pair.anchor.time === peak.time && pair.anchor.frequency === peak.frequency);
+                    const isTarget = this.pairs.some(pair => pair.target.time === peak.time && pair.target.frequency === peak.frequency);
+                    
+                    // Size based on magnitude (larger for better visibility)
+                    const size = Math.max(4, Math.min(12, (peak.magnitude || 10000) / 5000));
+                    
+                    // Color based on role
+                    if (isAnchor && isTarget) {
+                        this.ctx.fillStyle = '#ffff00'; // Yellow for both
+                    } else if (isAnchor) {
+                        this.ctx.fillStyle = '#00ffff'; // Cyan for anchors
+                    } else if (isTarget) {
+                        this.ctx.fillStyle = '#ff6b6b'; // Red for targets
+                    } else {
+                        this.ctx.fillStyle = '#888888'; // Gray for isolated
+                    }
+                    
+                    // Draw peak with glow effect
+                    this.ctx.shadowColor = this.ctx.fillStyle;
+                    this.ctx.shadowBlur = size * 2;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    this.ctx.shadowBlur = 0;
+                });
+                
+                // Show sample size info
+                if (this.hasRealData) {
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.font = '14px Arial';
+                    this.ctx.textAlign = 'left';
+                    this.ctx.fillText(`Showing first ${this.peaks.length} peaks for clarity`, 10, 25);
+                }
+            }
+            
+            drawAxes(margin, width, height, maxTime, maxFreq) {
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                this.ctx.font = '12px Arial';
+                this.ctx.lineWidth = 1;
+                
+                // X-axis (Time)
+                this.ctx.beginPath();
+                this.ctx.moveTo(margin, height - margin);
+                this.ctx.lineTo(width - margin, height - margin);
+                this.ctx.stroke();
+                
+                // Y-axis (Frequency)
+                this.ctx.beginPath();
+                this.ctx.moveTo(margin, margin);
+                this.ctx.lineTo(margin, height - margin);
+                this.ctx.stroke();
+                
+                // Labels
+                this.ctx.fillText('Time (seconds)', width / 2, height - 10);
+                this.ctx.save();
+                this.ctx.translate(15, height / 2);
+                this.ctx.rotate(-Math.PI / 2);
+                this.ctx.fillText('Frequency (Hz)', 0, 0);
+                this.ctx.restore();
+                
+                // Tick marks and values
+                for (let i = 0; i <= 5; i++) {
+                    const x = margin + (i / 5) * (width - 2 * margin);
+                    const time = (i / 5) * maxTime;
+                    this.ctx.fillText(time.toFixed(1), x - 10, height - margin + 20);
+                    
+                    const y = height - margin - (i / 5) * (height - 2 * margin);
+                    const freq = (i / 5) * maxFreq;
+                    this.ctx.fillText(Math.round(freq), 5, y + 5);
+                }
+            }
+            
+            handleMouseMove(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                // Find nearby peak
+                const margin = 40;
+                const maxTime = Math.max(...this.peaks.map(p => p.time));
+                const maxFreq = Math.max(...this.peaks.map(p => p.frequency));
+                const plotWidth = rect.width - 2 * margin;
+                const plotHeight = rect.height - 2 * margin;
+                
+                let nearestPeak = null;
+                let minDistance = Infinity;
+                
+                this.peaks.forEach(peak => {
+                    const px = margin + (peak.time / maxTime) * plotWidth;
+                    const py = rect.height - margin - (peak.frequency / maxFreq) * plotHeight;
+                    const distance = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+                    
+                    if (distance < 20 && distance < minDistance) {
+                        minDistance = distance;
+                        nearestPeak = peak;
+                    }
+                });
+                
+                if (nearestPeak) {
+                    this.showInfo(nearestPeak, event.clientX, event.clientY);
+                } else {
+                    this.hideInfo();
+                }
+            }
+            
+            showInfo(peak, x, y) {
+                const info = `
+                    <strong>Peak Info</strong><br>
+                    Time: ${peak.time.toFixed(2)}s<br>
+                    Frequency: ${peak.frequency.toFixed(0)} Hz<br>
+                    Magnitude: ${peak.magnitude.toFixed(0)}
+                `;
+                
+                document.getElementById('infoContent').innerHTML = info;
+                this.infoPanel.style.display = 'block';
+                this.infoPanel.style.left = x + 10 + 'px';
+                this.infoPanel.style.top = y + 10 + 'px';
+            }
+            
+            hideInfo() {
+                this.infoPanel.style.display = 'none';
+            }
+        }
+        
+        // Initialize the visualizer
+        const visualizer = new FingerprintVisualizer();
+        
+        // Instructions for the user
+        console.log(`
+🎵 To visualize your own fingerprints:
+
+1. In your Go code, add this function to export your data:
+
+func ExportFingerprints(peaks []Peak, pairs []ConstellationPair, fingerprints []Fingerprint, filename string) {
+    data := map[string]interface{}{
+        "peaks": peaks,
+        "pairs": pairs, 
+        "fingerprints": fingerprints,
+    }
+    
+    jsonData, _ := json.Marshal(data)
+    os.WriteFile(filename, jsonData, 0644)
+    fmt.Printf("Exported fingerprints to %s\\n", filename)
+}
+
+2. Call it after processing your song:
+ExportFingerprints(allPeaks, constellationMap, hashes, "fingerprints.json")
+
+3. Upload the JSON file using the button above!
+        `);
+    </script>
+</body>
+</html>
