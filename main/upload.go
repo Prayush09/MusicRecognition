@@ -9,6 +9,7 @@ import (
 	"io"
 	"github.com/go-audio/audio"
 	// "github.com/hajimehoshi/go-mp3"
+	"encoding/json"
 )
 
 type Song struct {
@@ -231,7 +232,29 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	songId := StoreSongInDB(song)
 	StoreFingerprintsInDB(songId, hashes)
 
+	ExportFingerprints(allPeaks, constellationMap, hashes, "techno-fingerprints.json")
 	fmt.Printf("Successfully processed: %s by %s\n", title, artist)
 	return nil
 }
 
+
+
+func ExportFingerprints(peaks []Peak, pairs []ConstellationPair, fingerprints []Fingerprint, filename string) {
+    homeDir, _ := os.UserHomeDir()
+	desktopPath := filepath.Join(homeDir, "Desktop", filename)
+
+	data := map[string]interface{}{
+        "peaks":       peaks,
+        "pairs":       pairs,
+        "fingerprints": fingerprints,
+    }
+    
+    jsonData, _ := json.Marshal(data)
+    err := os.WriteFile(desktopPath, jsonData, 0644)
+    if err != nil {
+        fmt.Printf("Error writing file: %v\n", err)
+        return
+    }
+    
+    fmt.Printf("🎵 Exported fingerprints to Desktop/%s\n", filename)
+}

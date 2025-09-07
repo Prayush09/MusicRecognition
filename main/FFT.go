@@ -6,7 +6,7 @@ import (
 
 	"github.com/mjibson/go-dsp/fft"
 )
-
+//TODO: Fix the clustering of peaks. Also figure out why the peaks are stored at 96kHz (out of human hearing range;-;)
 var RANGE = []int{40, 80, 120, 180, 300}
 
 func convertToFloat64(data []int16) []float64 {
