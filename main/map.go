@@ -113,8 +113,8 @@ func GenerateHashes(ConstellationMap []ConstellationPair) []Fingerprint {
 		//convert uint64 to 8*3 bytes (3 components) for SHA256 input 
 		data := make([]byte, 24)
 		binary.BigEndian.PutUint64(data[0:8], anchorFreq)
-		binary.BigEndian.PutUint64(data[9:16], targetFreq)
-		binary.BigEndian.PutUint64(data[17:24], timeDelta)
+		binary.BigEndian.PutUint64(data[8:16], targetFreq)
+		binary.BigEndian.PutUint64(data[16:24], timeDelta)
 
 		// generate SHA256 hash : 32 bytes of hashData
 		hashBytes := sha256.Sum256(data)
