@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"time"
-
+	"flag"
 	"github.com/gordonklaus/portaudio"
 )
 
@@ -23,16 +23,27 @@ func Recording() []int16 {
 		return []int16{}
 	}
 
+	rate := flag.Float64("rate", 0, "Sample rate (leave 0 to use device default)")
+
 	inputDevice, err := portaudio.DefaultInputDevice()
 	if err != nil {
 		log.Println("Failed to get default input device:", err)
 		return []int16{}
 	}
 
+	sampleRate := inputDevice.DefaultSampleRate
+	if *rate > 0 {
+		sampleRate = *rate
+	}
+	fmt.Printf("Using device: %s (sample rate: %.0f Hz)\n", inputDevice.Name, sampleRate)
+
+	// Configure stream parameters
 	parameters := portaudio.HighLatencyParameters(inputDevice, nil)
 	parameters.Input.Channels = 1
-	parameters.SampleRate = 44100
-	parameters.FramesPerBuffer = 1
+	parameters.SampleRate = sampleRate
+	parameters.FramesPerBuffer = 1024
+
+
 	buffer := make([]int16, 1024)
 	stream, err := portaudio.OpenStream(parameters, buffer)
 	if err != nil {

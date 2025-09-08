@@ -6,7 +6,9 @@ import (
 
 	"github.com/mjibson/go-dsp/fft"
 )
-//TODO: Fix the clustering of peaks. Also figure out why the peaks are stored at 96kHz (out of human hearing range;-;)
+
+// TODO: Fix the clustering of peaks. Also figure out why the peaks are stored at 96kHz (out of human hearing range;-;)
+// TODO: How can you use all these functions for both the songs and the clip? figure that out!
 var RANGE = []int{40, 80, 120, 180, 300}
 
 func convertToFloat64(data []int16) []float64 {
@@ -38,7 +40,6 @@ func extractMagnitudes(fftData []complex128) []float64 {
 	return magnitudes
 }
 
-
 // detect all local maxima
 func findPeaks(magnitudes []float64, threshold float64, binWidth float64, chunkIndex int) []Peak {
 	peaks := []Peak{}
@@ -67,7 +68,7 @@ func findRange(freq int) int {
 		i++
 	}
 	if i >= len(RANGE) {
-		return RANGE[len(RANGE)-1] // clamp to last band if above range
+		return RANGE[len(RANGE)-1] 
 	}
 	return RANGE[i]
 }
@@ -96,30 +97,66 @@ func classifyPeaks(allPeaks [][]Peak) [][]Peak {
 	return classified
 }
 
-// main FFT driver
-func FFT(allAudioData []int16) [][]Peak {
-	totalChunk := 256
-	allPeaks := make([][]Peak, totalChunk)
-
-	// Bin width = sampleRate / FFT_size
-	sampleRate := 44100.0
-	fftSize := 1024.0
-	binWidth := sampleRate / fftSize
-
-	for i := range totalChunk {
-		chunk := getChunk(allAudioData, i)
-		fmt.Printf("Processing chunk %d, Size: %d\n", i, len(chunk))
-
-		chunkFloat := convertToFloat64(chunk)
-		processedData := applyFFT(chunkFloat)
-		magnitudes := extractMagnitudes(processedData)
-
-		peaks := findPeaks(magnitudes, 50000.0, binWidth, i)
-		allPeaks[i] = peaks
-	}
-
-	// classify peaks into bands
-	classified := classifyPeaks(allPeaks)
-
-	return classified
+func FFT(allAudioData []int16, actualSampleRate int) [][]Peak {
+    const fixedChunkSize = 1024  
+    const overlap = 512          
+    
+    allPeaks := [][]Peak{}
+    binWidth := float64(actualSampleRate) / float64(fixedChunkSize)
+    
+    
+    for chunkIndex := 0; chunkIndex < len(allAudioData)-fixedChunkSize; chunkIndex += overlap {
+        end := chunkIndex + fixedChunkSize
+        if end > len(allAudioData) {
+            break
+        }
+        
+        chunk := allAudioData[chunkIndex:end]
+        fmt.Printf("Processing chunk %d, Size: %d\n", len(allPeaks), len(chunk))
+        
+        chunkFloat := convertToFloat64(chunk)
+        processedData := applyFFT(chunkFloat)
+        magnitudes := extractMagnitudes(processedData)
+        
+        peaks := findPeaks(magnitudes, 10000.0, binWidth, len(allPeaks))
+        
+        filteredPeaks := []Peak{}
+        for _, peak := range peaks {
+            if peak.Frequency < 8000 {  
+                filteredPeaks = append(filteredPeaks, peak)
+            }
+        }
+        
+        allPeaks = append(allPeaks, filteredPeaks)
+    }
+    
+    return classifyPeaks(allPeaks)
 }
+
+// main FFT driver
+// func FFT(allAudioData []int16) [][]Peak {
+// 	totalChunk := 256
+// 	allPeaks := make([][]Peak, totalChunk)
+
+// 	// Bin width = sampleRate / FFT_size
+// 	sampleRate := 44100.0
+// 	fftSize := 1024.0
+// 	binWidth := sampleRate / fftSize
+
+// 	for i := range totalChunk {
+// 		chunk := getChunk(allAudioData, i)
+// 		fmt.Printf("Processing chunk %d, Size: %d\n", i, len(chunk))
+
+// 		chunkFloat := convertToFloat64(chunk)
+// 		processedData := applyFFT(chunkFloat)
+// 		magnitudes := extractMagnitudes(processedData)
+
+// 		peaks := findPeaks(magnitudes, 50000.0, binWidth, i)
+// 		allPeaks[i] = peaks
+// 	}
+
+// 	// classify peaks into bands
+// 	classified := classifyPeaks(allPeaks)
+
+// 	return classified
+// }

@@ -121,7 +121,7 @@ func LoadWAVFile(fp string) ([]int16, int, error) {
         
         if err != nil {
             if err == io.EOF {
-                fmt.Println("DEBUG: Reached EOF")  // ADD THIS
+                fmt.Println("DEBUG: Reached EOF")  
                 break
             }
             return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
@@ -216,7 +216,7 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	}
 
 	//Fingerprinting Process
-	classifiedPeaks := FFT(audioData)
+	classifiedPeaks := FFT(audioData, sampleRate)
 	allPeaks := FlattenPeaks(classifiedPeaks, 864, sampleRate) //Chunk Size : 864
 	constellationMap := CreateConstellationMap(allPeaks)
 	hashes := GenerateHashes(constellationMap)

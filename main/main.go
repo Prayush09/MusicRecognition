@@ -26,7 +26,7 @@ func main(){
 
 		fmt.Println("FFT Processing Begins")
 		//FFT Processing
-		classifiedPeaks := FFT(audioData)
+		classifiedPeaks := FFT(audioData, 0)
 		fmt.Println("FFT Processing Ends")
 
 		//constellation map 
