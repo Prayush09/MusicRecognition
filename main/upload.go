@@ -113,7 +113,7 @@ func LoadWAVFile(fp string) ([]int16, int, error) {
         Format: format,
     }
     
-    totalSamples := 0  // ADD THIS
+    totalSamples := 0 
     
     for {
         n, err := decoder.PCMBuffer(buffer)
