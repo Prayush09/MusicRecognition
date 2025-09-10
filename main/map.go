@@ -75,7 +75,7 @@ func CreateConstellationMap(allPeaks []Peak) []ConstellationPair {
 				continue
 			}
 
-			//break as the current target is too far away from anchor and so no meaning in checking further
+			//break as the current target is too far away from anchor 
 			if timeDelta > maxSeperation {
 				break
 			}
