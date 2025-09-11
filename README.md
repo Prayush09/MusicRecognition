@@ -96,12 +96,8 @@ The **Fast Fourier Transform (FFT)** reduces complexity to O(N log N), enabling 
 
 # Current Development Notes
 
-- **Bug Investigation:** Some detected peaks are incorrectly showing near **98kHz**, which is above the Nyquist limit for 44.1kHz audio.  
-  - Likely due to aliasing or FFT scaling issues.  
-  - Identified via a custom-built spectrogram visualizer.  
-
 - **Format Handling:**  
-  - **MP3**: Requires decoding into PCM format for the recognition pipeline to work. 
+  - **MP3**: Testing TBD. Implemented.
 
 - **Next Step:**  
   - Finalize **hash matching and database search** to complete the recognition pipeline.  
@@ -113,7 +109,7 @@ The **Fast Fourier Transform (FFT)** reduces complexity to O(N log N), enabling 
 - **Temporal Resolution**: Fine enough to track short audio events.  
 - **Scalability**: Efficient for millions of fingerprints.  
 - **Robustness**: Works across noisy environments and compressed formats.  
-
+- **Bug Fixing**: Built a custom-build spectrogram visulizer to fix the FFT scaling issue.
 ---
 
 # References
