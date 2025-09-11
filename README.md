@@ -101,8 +101,7 @@ The **Fast Fourier Transform (FFT)** reduces complexity to O(N log N), enabling 
   - Identified via a custom-built spectrogram visualizer.  
 
 - **Format Handling:**  
-  - **WAV**: Straightforward PCM access.  
-  - **MP3**: Requires decoding before analysis, but enables compressed song uploads.  
+  - **MP3**: Requires decoding into PCM format for the recognition pipeline to work. 
 
 - **Next Step:**  
   - Finalize **hash matching and database search** to complete the recognition pipeline.  

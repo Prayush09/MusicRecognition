@@ -1,27 +1,29 @@
 package main
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"github.com/go-audio/wav"
-	"io"
+
 	"github.com/go-audio/audio"
-	// "github.com/hajimehoshi/go-mp3"
-	"encoding/json"
+	"github.com/go-audio/wav"
+	"github.com/hajimehoshi/go-mp3"
 )
 
 type Song struct {
-	ID int
-	Title string
-	Artist string
+	ID       int
+	Title    string
+	Artist   string
 	FilePath string
 	Duration float64
 }
 
-//TODO: ADD PROCESSALLSONGSFROMDIRECTORY function, and implement LoadFromWAV and LoadFromMP3 functions.
-func LoadWAVFile1(fp string) ([]int16, int, error){
+// TODO: ADD PROCESSALLSONGSFROMDIRECTORY function, & test the loadmp3 function
+func LoadWAVFile1(fp string) ([]int16, int, error) {
 	file, err := os.Open(fp)
 	if err != nil {
 		return nil, 0, fmt.Errorf("Failed to open WAV File: %w", fp)
@@ -29,7 +31,6 @@ func LoadWAVFile1(fp string) ([]int16, int, error){
 
 	defer file.Close()
 
-	
 	decoder := wav.NewDecoder(file)
 	if !decoder.IsValidFile() {
 		return nil, 0, fmt.Errorf("Invalid WAV File!")
@@ -40,25 +41,25 @@ func LoadWAVFile1(fp string) ([]int16, int, error){
 	sampleRate := int(format.SampleRate)
 	bitDepth := 16
 
-	//read samples: 
+	//read samples:
 	var audioData []int16
 	bufferSize := 8192
 	buffer := &audio.IntBuffer{
-		Data: make([]int, bufferSize),
+		Data:   make([]int, bufferSize),
 		Format: format,
 	}
 
 	for {
 		n, err := decoder.PCMBuffer(buffer)
 		if err != nil {
-            if err == io.EOF {
-                break
-            }
-            return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
-        }
+			if err == io.EOF {
+				break
+			}
+			return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
+		}
 
 		for i := 0; i < n; i++ {
-            curr := int16(buffer.Data[i])  
+			curr := int16(buffer.Data[i])
 			var sample int16
 			switch bitDepth {
 			case 8:
@@ -73,107 +74,139 @@ func LoadWAVFile1(fp string) ([]int16, int, error){
 			default:
 				sample = int16(curr)
 			}
-			
+
 			audioData = append(audioData, sample)
-        }
+		}
 
 		if n < bufferSize {
 			break
 		}
 	}
-	
+
 	if format.NumChannels == 2 {
 		audioData = StereoToMono(audioData)
 	}
-	
+
 	return audioData, sampleRate, nil
 }
 
 func LoadWAVFile(fp string) ([]int16, int, error) {
-    file, err := os.Open(fp)
-    if err != nil {
-        return nil, 0, fmt.Errorf("failed to open wav file: %w", err)
-    }
-    defer file.Close()
-    
-    decoder := wav.NewDecoder(file)
-    if !decoder.IsValidFile() {
-        return nil, 0, fmt.Errorf("invalid wav file")
-    }
-    
-    format := decoder.Format()
-    sampleRate := int(format.SampleRate)
-    
-    fmt.Printf("DEBUG: Format - SampleRate: %d, Channels: %d\n", format.SampleRate, format.NumChannels)  // ADD THIS
-    
-    var audioData []int16
-    bufferSize := 8192
-    buffer := &audio.IntBuffer{
-        Data:   make([]int, bufferSize),
-        Format: format,
-    }
-    
-    totalSamples := 0 
-    
-    for {
-        n, err := decoder.PCMBuffer(buffer)
-        fmt.Printf("DEBUG: PCMBuffer returned n=%d, err=%v\n", n, err)  // ADD THIS
-        
-        if err != nil {
-            if err == io.EOF {
-                fmt.Println("DEBUG: Reached EOF")  
-                break
-            }
-            return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
-        }
-        
-        totalSamples += n  // ADD THIS
-        
-        for i := range n {
-            sample := int16(buffer.Data[i])
-            audioData = append(audioData, sample)
-        }
-        
-        if n < bufferSize {
-            fmt.Printf("DEBUG: Read less than buffer size, breaking (n=%d)\n", n)  // ADD THIS
-            break
-        }
-    }
-    
-    fmt.Printf("DEBUG: Total samples read: %d, Final audioData length: %d\n", totalSamples, len(audioData))  // ADD THIS
-    
-    if format.NumChannels == 2 {
-        fmt.Println("DEBUG: Converting stereo to mono")  // ADD THIS
-        audioData = StereoToMono(audioData)
-        fmt.Printf("DEBUG: After mono conversion: %d samples\n", len(audioData))  // ADD THIS
-    }
-    
-    return audioData, sampleRate, nil
+	file, err := os.Open(fp)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to open wav file: %w", err)
+	}
+	defer file.Close()
+
+	decoder := wav.NewDecoder(file)
+	if !decoder.IsValidFile() {
+		return nil, 0, fmt.Errorf("invalid wav file")
+	}
+
+	format := decoder.Format()
+	sampleRate := int(format.SampleRate)
+
+	fmt.Printf("DEBUG: Format - SampleRate: %d, Channels: %d\n", format.SampleRate, format.NumChannels) // ADD THIS
+
+	var audioData []int16
+	bufferSize := 8192
+	buffer := &audio.IntBuffer{
+		Data:   make([]int, bufferSize),
+		Format: format,
+	}
+
+	totalSamples := 0
+
+	for {
+		n, err := decoder.PCMBuffer(buffer)
+		fmt.Printf("DEBUG: PCMBuffer returned n=%d, err=%v\n", n, err)
+
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("DEBUG: Reached EOF")
+				break
+			}
+			return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
+		}
+
+		totalSamples += n
+
+		for i := range n {
+			sample := int16(buffer.Data[i])
+			audioData = append(audioData, sample)
+		}
+
+		if n < bufferSize {
+			fmt.Printf("DEBUG: Read less than buffer size, breaking (n=%d)\n", n)
+			break
+		}
+	}
+
+	fmt.Printf("DEBUG: Total samples read: %d, Final audioData length: %d\n", totalSamples, len(audioData))
+
+	if format.NumChannels == 2 {
+		fmt.Println("DEBUG: Converting stereo to mono")
+		audioData = StereoToMono(audioData)
+		fmt.Printf("DEBUG: After mono conversion: %d samples\n", len(audioData))
+	}
+
+	return audioData, sampleRate, nil
 }
 
-func LoadMP3File(fp string) ([]int16, int, error){
-	hello := []int16{1}
-	return hello, 0, nil
+func LoadMP3File(fp string) ([]int16, int, error) {
+	file, err := os.Open(fp)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error while accessing the mp3 file")
+	}
+	defer file.Close()
+
+	decoder, err := mp3.NewDecoder(file)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error while decoding the mp3 file")
+	}
+
+	sampleRate := decoder.SampleRate()
+	bufferSize := 8192
+	buffer := make([]byte, bufferSize)
+	var audioData []int16
+
+	for {
+		n, err := decoder.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, 0, fmt.Errorf("error reading MP3 data: %w", err)
+		}
+
+		for i := 0; i+1 < n; i += 2 {
+			sample := int16(binary.LittleEndian.Uint16(buffer[i : i+2]))
+			audioData = append(audioData, sample)
+		}
+	}
+
+	audioData = StereoToMono(audioData)
+
+	return audioData, sampleRate, nil
 }
 
 func StereoToMono(stereoData []int16) []int16 {
 	if len(stereoData)%2 != 0 {
-        // Handle odd-length data
-        stereoData = stereoData[:len(stereoData)-1]
-    }
-    
-    monoData := make([]int16, len(stereoData)/2)
-    
-    for i := 0; i < len(monoData); i++ {
-        left := int32(stereoData[i*2])      // Left channel
-        right := int32(stereoData[i*2+1])   // Right channel
-        
-        // Average the two channels
-        average := (left + right) / 2
-        monoData[i] = int16(average)
-    }
-    
-    return monoData
+		// Handle odd-length data
+		stereoData = stereoData[:len(stereoData)-1]
+	}
+
+	monoData := make([]int16, len(stereoData)/2)
+
+	for i := 0; i < len(monoData); i++ {
+		left := int32(stereoData[i*2])    // Left channel
+		right := int32(stereoData[i*2+1]) // Right channel
+
+		// Average the two channels
+		average := (left + right) / 2
+		monoData[i] = int16(average)
+	}
+
+	return monoData
 }
 
 func StoreSongInDB(song Song) int {
@@ -198,14 +231,14 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	var err error
 
 	ext := strings.ToLower(filepath.Ext(fp))
-	
+
 	switch ext {
 
 	case ".wav":
 		audioData, sampleRate, err = LoadWAVFile(fp)
 		if err != nil {
 			return fmt.Errorf("error occured while calling load wav function")
-			
+
 		}
 
 	case ".mp3":
@@ -221,12 +254,11 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	constellationMap := CreateConstellationMap(allPeaks)
 	hashes := GenerateHashes(constellationMap)
 
-
 	song := Song{
-		Title: title,
-		Artist: artist,
+		Title:    title,
+		Artist:   artist,
 		FilePath: fp,
-		Duration: float64(len(audioData))/float64(sampleRate),
+		Duration: float64(len(audioData)) / float64(sampleRate),
 	}
 
 	songId := StoreSongInDB(song)
@@ -237,24 +269,22 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	return nil
 }
 
-
-
 func ExportFingerprints(peaks []Peak, pairs []ConstellationPair, fingerprints []Fingerprint, filename string) {
-    homeDir, _ := os.UserHomeDir()
+	homeDir, _ := os.UserHomeDir()
 	desktopPath := filepath.Join(homeDir, "Desktop", filename)
 
 	data := map[string]interface{}{
-        "peaks":       peaks,
-        "pairs":       pairs,
-        "fingerprints": fingerprints,
-    }
-    
-    jsonData, _ := json.Marshal(data)
-    err := os.WriteFile(desktopPath, jsonData, 0644)
-    if err != nil {
-        fmt.Printf("Error writing file: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("🎵 Exported fingerprints to Desktop/%s\n", filename)
+		"peaks":        peaks,
+		"pairs":        pairs,
+		"fingerprints": fingerprints,
+	}
+
+	jsonData, _ := json.Marshal(data)
+	err := os.WriteFile(desktopPath, jsonData, 0644)
+	if err != nil {
+		fmt.Printf("Error writing file: %v\n", err)
+		return
+	}
+
+	fmt.Printf("🎵 Exported fingerprints to Desktop/%s\n", filename)
 }
