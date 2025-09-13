@@ -12,83 +12,21 @@ import (
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
 	"github.com/hajimehoshi/go-mp3"
+
+	"shazam/main/db"
 )
 
+// Struct definitions that match the database models
 type Song struct {
-	ID       int
-	Title    string
-	Artist   string
-	FilePath string
-	Duration float64
+	ID          uint      `json:"id"`
+	Title       string    `json:"title"`
+	Artist      string    `json:"artist"`
+	FilePath    string    `json:"file_path"`
+	Duration    float64   `json:"duration"`
+	SampleRate  int       `json:"sample_rate"`
+	FileFormat  string    `json:"file_format"`
 }
 
-// TODO: ADD PROCESSALLSONGSFROMDIRECTORY function, & test the loadmp3 function
-func LoadWAVFile1(fp string) ([]int16, int, error) {
-	file, err := os.Open(fp)
-	if err != nil {
-		return nil, 0, fmt.Errorf("Failed to open WAV File: %w", fp)
-	}
-
-	defer file.Close()
-
-	decoder := wav.NewDecoder(file)
-	if !decoder.IsValidFile() {
-		return nil, 0, fmt.Errorf("Invalid WAV File!")
-	}
-
-	//get format, create buffer and start decoding wav file
-	format := decoder.Format()
-	sampleRate := int(format.SampleRate)
-	bitDepth := 16
-
-	//read samples:
-	var audioData []int16
-	bufferSize := 8192
-	buffer := &audio.IntBuffer{
-		Data:   make([]int, bufferSize),
-		Format: format,
-	}
-
-	for {
-		n, err := decoder.PCMBuffer(buffer)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, 0, fmt.Errorf("error reading PCM data: %w", err)
-		}
-
-		for i := 0; i < n; i++ {
-			curr := int16(buffer.Data[i])
-			var sample int16
-			switch bitDepth {
-			case 8:
-				// 8-bit samples are unsigned (0-255), convert to signed 16-bit
-				sample = int16((curr - 128) * 256)
-			case 16:
-				// 16-bit samples, direct conversion
-				sample = int16(curr)
-			case 24, 32:
-				// Higher bit depth, scale down to 16-bit
-				sample = int16(curr / (1 << (bitDepth - 16)))
-			default:
-				sample = int16(curr)
-			}
-
-			audioData = append(audioData, sample)
-		}
-
-		if n < bufferSize {
-			break
-		}
-	}
-
-	if format.NumChannels == 2 {
-		audioData = StereoToMono(audioData)
-	}
-
-	return audioData, sampleRate, nil
-}
 
 func LoadWAVFile(fp string) ([]int16, int, error) {
 	file, err := os.Open(fp)
@@ -105,7 +43,7 @@ func LoadWAVFile(fp string) ([]int16, int, error) {
 	format := decoder.Format()
 	sampleRate := int(format.SampleRate)
 
-	fmt.Printf("DEBUG: Format - SampleRate: %d, Channels: %d\n", format.SampleRate, format.NumChannels) // ADD THIS
+	fmt.Printf("DEBUG: Format - SampleRate: %d, Channels: %d\n", format.SampleRate, format.NumChannels)
 
 	var audioData []int16
 	bufferSize := 8192
@@ -209,18 +147,34 @@ func StereoToMono(stereoData []int16) []int16 {
 	return monoData
 }
 
-func StoreSongInDB(song Song) int {
-	// TODO: Implement with Prisma
-	// INSERT INTO songs (title, artist, file_path, duration) VALUES (...)
-	// RETURN song_id
-	fmt.Printf("Storing song: %s by %s\n", song.Title, song.Artist)
-	return 1 // Placeholder
+// Fixed StoreSongInDB function
+func StoreSongInDB(song Song, sampleRate int) uint {
+	// Convert your Song struct to the database Song struct
+	dbSong := db.Song{
+		Title:      song.Title,
+		Artist:     song.Artist,
+		FilePath:   song.FilePath,
+		Duration:   song.Duration,
+		SampleRate: sampleRate,
+	}
+	
+	return db.StoreSongInDB(dbSong, sampleRate)
 }
 
-func StoreFingerprintsInDB(songID int, fingerprints []Fingerprint) {
-	// TODO: Implement with Prisma
-	// Batch INSERT INTO fingerprints (hash, song_id, time_offset) VALUES (...)
-	fmt.Printf("Storing %d fingerprints for song ID %d\n", len(fingerprints), songID)
+// Fixed StoreFingerprintsInDB function
+func StoreFingerprintsInDB(songID uint, fingerprints []Fingerprint) {
+	// Convert your Fingerprint structs to database Fingerprint structs
+	var dbFingerprints []db.Fingerprint
+	
+	for _, fp := range fingerprints {
+		dbFingerprints = append(dbFingerprints, db.Fingerprint{
+			Hash:       int64(fp.Hash),
+			SongID:     songID,
+			TimeStamp: fp.TimeStamp, 
+		})
+	}
+	
+	db.StoreFingerprintsInDB(songID, dbFingerprints)
 }
 
 func ProcessUploadedSong(fp, title, artist string) error {
@@ -233,24 +187,25 @@ func ProcessUploadedSong(fp, title, artist string) error {
 	ext := strings.ToLower(filepath.Ext(fp))
 
 	switch ext {
-
 	case ".wav":
 		audioData, sampleRate, err = LoadWAVFile(fp)
 		if err != nil {
-			return fmt.Errorf("error occured while calling load wav function")
-
+			return fmt.Errorf("error occurred while calling load wav function: %w", err)
 		}
 
 	case ".mp3":
 		audioData, sampleRate, err = LoadMP3File(fp)
 		if err != nil {
-			return fmt.Errorf("error occured while calling load mp3 function")
+			return fmt.Errorf("error occurred while calling load mp3 function: %w", err)
 		}
+	
+	default:
+		return fmt.Errorf("unsupported file format: %s", ext)
 	}
 
-	//Fingerprinting Process
+	// Fingerprinting Process
 	classifiedPeaks := FFT(audioData, sampleRate)
-	allPeaks := FlattenPeaks(classifiedPeaks, 864, sampleRate) //Chunk Size : 864
+	allPeaks := FlattenPeaks(classifiedPeaks, 864, sampleRate)
 	constellationMap := CreateConstellationMap(allPeaks)
 	hashes := GenerateHashes(constellationMap)
 
@@ -261,7 +216,8 @@ func ProcessUploadedSong(fp, title, artist string) error {
 		Duration: float64(len(audioData)) / float64(sampleRate),
 	}
 
-	songId := StoreSongInDB(song)
+	// Store in database - now returns uint instead of int
+	songId := StoreSongInDB(song, sampleRate)
 	StoreFingerprintsInDB(songId, hashes)
 
 	ExportFingerprints(allPeaks, constellationMap, hashes, "techno-fingerprints.json")
@@ -286,5 +242,5 @@ func ExportFingerprints(peaks []Peak, pairs []ConstellationPair, fingerprints []
 		return
 	}
 
-	fmt.Printf("🎵 Exported fingerprints to Desktop/%s\n", filename)
+	fmt.Printf("Exported fingerprints to Desktop/%s\n", filename)
 }

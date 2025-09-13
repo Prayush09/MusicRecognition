@@ -7,26 +7,19 @@ import (
 	"github.com/mjibson/go-dsp/fft"
 )
 
-// TODO: Fix the clustering of peaks. Also figure out why the peaks are stored at 96kHz (out of human hearing range;-;)
-// TODO: How can you use all these functions for both the songs and the clip? figure that out!
+
+
 var RANGE = []int{40, 80, 120, 180, 300}
 
 func convertToFloat64(data []int16) []float64 {
 	dataFloat64 := make([]float64, len(data))
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		dataFloat64[i] = float64(data[i])
 	}
 	return dataFloat64
 }
 
-func getChunk(data []int16, chunkNumber int) []int16 {
-	chunkSize := len(data) / 256
 
-	start := chunkSize * chunkNumber
-	end := start + chunkSize
-
-	return data[start:end]
-}
 
 func applyFFT(chunk []float64) []complex128 {
 	return fft.FFTReal(chunk)
@@ -133,30 +126,3 @@ func FFT(allAudioData []int16, actualSampleRate int) [][]Peak {
     return classifyPeaks(allPeaks)
 }
 
-// main FFT driver
-// func FFT(allAudioData []int16) [][]Peak {
-// 	totalChunk := 256
-// 	allPeaks := make([][]Peak, totalChunk)
-
-// 	// Bin width = sampleRate / FFT_size
-// 	sampleRate := 44100.0
-// 	fftSize := 1024.0
-// 	binWidth := sampleRate / fftSize
-
-// 	for i := range totalChunk {
-// 		chunk := getChunk(allAudioData, i)
-// 		fmt.Printf("Processing chunk %d, Size: %d\n", i, len(chunk))
-
-// 		chunkFloat := convertToFloat64(chunk)
-// 		processedData := applyFFT(chunkFloat)
-// 		magnitudes := extractMagnitudes(processedData)
-
-// 		peaks := findPeaks(magnitudes, 50000.0, binWidth, i)
-// 		allPeaks[i] = peaks
-// 	}
-
-// 	// classify peaks into bands
-// 	classified := classifyPeaks(allPeaks)
-
-// 	return classified
-// }

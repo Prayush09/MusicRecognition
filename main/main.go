@@ -3,11 +3,23 @@ package main
 import (
 	"fmt"
 	"os"
+	"log"
+	"github.com/joho/godotenv"
+	"shazam/main/db"
 )
 
 var sampleRate int
 
 func main(){
+
+	if err := godotenv.Load(); err != nil {
+		log.Fatal(("Unable to load env"))
+	}
+
+	if err := db.InitDB(); err != nil {
+        log.Fatal("Failed to initialize database:", err)
+    }
+    defer db.CloseDB()
 
 	//TODO: add better logic of switching instead of relying on the no. of arguments passed
 	 if len(os.Args) < 2 {
@@ -19,28 +31,28 @@ func main(){
     
     switch os.Args[1] {
 		case "record":
-			//recording 
-		fmt.Println("Sound Recording Starts")
-		audioData := Recording()
-		fmt.Println("Sound Recording Ended")
+			
+			fmt.Println("Sound Recording Starts")
+			audioData := Recording()
+			fmt.Println("Sound Recording Ended")
 
-		fmt.Println("FFT Processing Begins")
-		//FFT Processing
-		classifiedPeaks := FFT(audioData, 0)
-		fmt.Println("FFT Processing Ends")
+			fmt.Println("FFT Processing Begins")
+			
+			classifiedPeaks := FFT(audioData, 0)
+			fmt.Println("FFT Processing Ends")
 
-		//constellation map 
-		fmt.Println("Create Constellation Map")
-		allPeaks := FlattenPeaks(classifiedPeaks, 864, sampleRate)
-		fmt.Printf("Total Peaks found: %d\n", len(allPeaks))
+			
+			fmt.Println("Create Constellation Map")
+			allPeaks := FlattenPeaks(classifiedPeaks, 864, sampleRate)
+			fmt.Printf("Total Peaks found: %d\n", len(allPeaks))
 
-		constellationMap := CreateConstellationMap(allPeaks)
-		fmt.Println("Constellation map created")
+			constellationMap := CreateConstellationMap(allPeaks)
+			fmt.Println("Constellation map created")
 
-		//hashing
-		hashes := GenerateHashes(constellationMap)
-		fmt.Printf("Hashed Created: %d", len(hashes))
-		fmt.Println("Just a fun commit")
+			
+			hashes := GenerateHashes(constellationMap)
+			fmt.Printf("Hashed Created: %d", len(hashes))
+			fmt.Println("Just a fun commit")
 	
     case "upload":
         // New upload processing logic
