@@ -12,6 +12,7 @@ var sampleRate int
 
 func main(){
 
+	
 	if err := godotenv.Load(); err != nil {
 		log.Fatal(("Unable to load env"))
 	}
