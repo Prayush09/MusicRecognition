@@ -2,112 +2,84 @@ package db
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
+	"shazam/main/models"
+	"shazam/main/utils"
+	"strings"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
-// Database connection
-var db *gorm.DB
-
-// GORM Models
-type Song struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Title       string    `gorm:"size:255;not null" json:"title"`
-	Artist      string    `gorm:"size:255;not null" json:"artist"`
-	FileName    string    `gorm:"size:500" json:"file_name"`
-	FilePath    string    `gorm:"size:500" json:"file_path"`
-	FileSize    int64     `json:"file_size"`
-	Duration    float64   `json:"duration"`
-	SampleRate  int       `json:"sample_rate"`
-	FileFormat  string    `gorm:"size:10" json:"file_format"`
-	UploadedAt  time.Time `gorm:"autoCreateTime" json:"uploaded_at"`
-	ProcessedAt *time.Time `json:"processed_at"`
-	IsProcessed bool      `gorm:"default:false" json:"is_processed"`
-	
-	// Relationships
-	Fingerprints []Fingerprint `gorm:"foreignKey:SongID;constraint:OnDelete:CASCADE" json:"-"`
-	QueryResults []QueryResult `gorm:"foreignKey:SongID;constraint:OnDelete:CASCADE" json:"-"`
+type PostgresClient struct {
+	db *gorm.DB
 }
 
-type Fingerprint struct {
-	ID         uint    `gorm:"primaryKey" json:"id"`
-	Hash       int64   `gorm:"index:idx_hash;not null" json:"hash"`
-	SongID     uint    `gorm:"index:idx_song_id;not null" json:"song_id"`
-	TimeStamp  float64 `gorm:"column:time_offset;not null" json:"time_stamp"`
-	
-	// Optional debugging fields
-	AnchorFreq float64 `json:"anchor_frequency,omitempty"`
-	TargetFreq float64 `json:"target_frequency,omitempty"`
-	TimeDelta  float64 `json:"time_delta,omitempty"`
-	
-	// Relationships
-	Song Song `gorm:"foreignKey:SongID" json:"-"`
-}
+//todo: replace all fingerprints, song, and couples with models.fingerprint, models.song and models.couples
 
-type QuerySession struct {
-	ID            string     `gorm:"primaryKey;type:varchar(50)" json:"id"`
-	QueryDuration float64    `json:"query_duration"`
-	SampleRate    int        `json:"sample_rate"`
-	TotalPeaks    int        `json:"total_peaks"`
-	TotalPairs    int        `json:"total_pairs"`
-	TotalHashes   int        `json:"total_hashes"`
-	MatchFound    bool       `gorm:"default:false" json:"match_found"`
-	BestMatchID   *uint      `json:"best_match_song_id,omitempty"`
-	MatchScore    int        `json:"match_score"`
-	TimeInSong    float64    `json:"time_in_song"`
-	Confidence    float64    `json:"confidence_score"`
-	QueryTime     time.Time  `gorm:"autoCreateTime" json:"query_time"`
-	ProcessTime   float64    `json:"process_time_ms"`
-	
-	// Relationships
-	BestMatch    *Song         `gorm:"foreignKey:BestMatchID" json:"best_match,omitempty"`
-	QueryResults []QueryResult `gorm:"foreignKey:SessionID;constraint:OnDelete:CASCADE" json:"query_results,omitempty"`
-}
-
-type QueryResult struct {
-	ID             uint    `gorm:"primaryKey" json:"id"`
-	SessionID      string  `gorm:"index:idx_session_id;not null" json:"session_id"`
-	SongID         uint    `gorm:"index:idx_song_id;not null" json:"song_id"`
-	MatchingHashes int     `gorm:"not null" json:"matching_hashes"`
-	TimeOffset     float64 `gorm:"not null" json:"time_offset"`
-	Confidence     float64 `json:"confidence_score"`
-	
-	// Relationships
-	Session QuerySession `gorm:"foreignKey:SessionID" json:"-"`
-	Song    Song         `gorm:"foreignKey:SongID" json:"song,omitempty"`
-}
-
-
-func InitDB() error {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return fmt.Errorf("DATABASE_URL environment variable is required")
+// NewPostgresClient creates a new GORM-based PostgreSQL client for Neon DB
+func NewPostgresClient(dsn string) (*PostgresClient, error) {
+	// Configure GORM for PostgreSQL with optimizations
+	config := &gorm.Config{
+		PrepareStmt: true,                                // Enable prepared statements
+		Logger:      logger.Default.LogMode(logger.Warn), // Reduce logging noise
 	}
 
-	var err error
-	db, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), config)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("error connecting to PostgreSQL: %s", err)
 	}
 
-	err = db.AutoMigrate(&Song{}, &Fingerprint{}, &QuerySession{}, &QueryResult{})
+	// Configure connection pool for Neon DB free tier
+	sqlDB, err := db.DB()
 	if err != nil {
-		return fmt.Errorf("failed to migrate database: %w", err)
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %v", err)
 	}
 
-	fmt.Println("✅ Successfully connected to database and migrated schema")
+	// Optimize for Neon DB free tier limits
+	sqlDB.SetMaxOpenConns(10)                 // Limit concurrent connections
+	sqlDB.SetMaxIdleConns(5)                  // Keep some connections alive
+	sqlDB.SetConnMaxLifetime(time.Hour)       // Recycle connections
+	sqlDB.SetConnMaxIdleTime(time.Minute * 5) // Close idle connections
+
+	// Auto-migrate tables
+	err = db.AutoMigrate(&models.Song{}, &models.Fingerprint{})
+	if err != nil {
+		return nil, fmt.Errorf("error creating tables: %s", err)
+	}
+
+	// Create additional indexes for better performance
+	if err := createOptimizedIndexes(db); err != nil {
+		// Log warning but don't fail - indexes might already exist
+		fmt.Printf("Warning: Could not create some indexes: %v\n", err)
+	}
+
+	return &PostgresClient{db: db}, nil
+}
+
+// createOptimizedIndexes creates additional indexes for better query performance
+func createOptimizedIndexes(db *gorm.DB) error {
+	indexes := []string{
+		"CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fingerprints_address_song ON fingerprints (address, song_id)",
+		"CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_songs_title_artist ON songs (title, artist)",
+		"CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fingerprints_song_time ON fingerprints (song_id, anchor_time_ms)",
+	}
+
+	for _, idx := range indexes {
+		if err := db.Exec(idx).Error; err != nil {
+			// Continue with other indexes even if one fails
+			continue
+		}
+	}
 	return nil
 }
 
-
-func CloseDB() error {
-	if db != nil {
-		sqlDB, err := db.DB()
+// Close closes the database connection
+func (c *PostgresClient) Close() error {
+	if c.db != nil {
+		sqlDB, err := c.db.DB()
 		if err != nil {
 			return err
 		}
@@ -116,227 +88,165 @@ func CloseDB() error {
 	return nil
 }
 
-// StoreSongInDB stores a song using GORM and returns the generated ID
-func StoreSongInDB(songData Song, sampleRate int) uint {
-	// Extract file info
-	fileName := filepath.Base(songData.FilePath)
-	fileExt := filepath.Ext(songData.FilePath)
-	if fileExt != "" {
-		fileExt = fileExt[1:] // Remove the dot
-	}
-	
-	// Get file size
-	var fileSize int64
-	if stat, err := os.Stat(songData.FilePath); err == nil {
-		fileSize = stat.Size()
-	}
-
-	song := Song{
-		Title:       songData.Title,
-		Artist:      songData.Artist,
-		FileName:    fileName,
-		FilePath:    songData.FilePath,
-		FileSize:    fileSize,
-		Duration:    songData.Duration,
-		SampleRate:  sampleRate,
-		FileFormat:  fileExt,
-		UploadedAt:  time.Now(),
-		IsProcessed: false,
-	}
-
-	result := db.Create(&song)
-	if result.Error != nil {
-		log.Printf("Error storing song in database: %v", result.Error)
-		return 0
-	}
-
-	fmt.Printf("Stored song: %s by %s (ID: %d)\n", song.Title, song.Artist, song.ID)
-	return song.ID
-}
-
-// StoreFingerprintsInDB stores fingerprints in batch using GORM
-func StoreFingerprintsInDB(songID uint, fingerprints []Fingerprint) {
+// StoreFingerprints stores fingerprints using efficient batch insert with conflict resolution
+func (c *PostgresClient) StoreFingerprints(fingerprints map[uint32]Couple) error {
 	if len(fingerprints) == 0 {
-		fmt.Printf("No fingerprints to store for song ID %d\n", songID)
-		return
+		return nil
 	}
 
-	// Convert your fingerprint format to GORM model
-	var dbFingerprints []Fingerprint
-	for _, fp := range fingerprints {
-		dbFingerprints = append(dbFingerprints, Fingerprint{
-			Hash:       int64(fp.Hash),
-			SongID:     songID,
-			TimeStamp: fp.TimeStamp,
-			// Add optional fields if available
-			AnchorFreq: 0, // You can extract from constellation pairs if needed
-			TargetFreq: 0,
-			TimeDelta:  0,
+	// Convert map to slice for batch insert
+	fpSlice := make([]Fingerprint, 0, len(fingerprints))
+	for address, couple := range fingerprints {
+		fpSlice = append(fpSlice, Fingerprint{
+			Address:      address,
+			AnchorTimeMs: couple.AnchorTimeMs,
+			SongID:       couple.SongID,
 		})
 	}
 
-	// Batch insert fingerprints
-	const batchSize = 1000
-	for i := 0; i < len(dbFingerprints); i += batchSize {
-		end := i + batchSize
-		if end > len(dbFingerprints) {
-			end = len(dbFingerprints)
-		}
+	// Use transaction with batch insert and conflict resolution
+	return c.db.Transaction(func(tx *gorm.DB) error {
+		// Use ON CONFLICT DO NOTHING for PostgreSQL
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).
+			CreateInBatches(fpSlice, 1000).Error
+	})
+}
 
-		batch := dbFingerprints[i:end]
-		result := db.CreateInBatches(&batch, batchSize)
-		if result.Error != nil {
-			log.Printf("Error inserting fingerprint batch: %v", result.Error)
-			continue
-		}
-
-		fmt.Printf("Inserted batch %d-%d fingerprints for song ID %d\n", i+1, end, songID)
+// GetCouples retrieves couples by addresses efficiently
+func (c *PostgresClient) GetCouples(addresses []uint32) (map[uint32][]Couple, error) {
+	if len(addresses) == 0 {
+		return make(map[uint32][]Couple), nil
 	}
 
-	// Mark song as processed
-	now := time.Now()
-	db.Model(&Song{}).Where("id = ?", songID).Updates(Song{
-		IsProcessed: true,
-		ProcessedAt: &now,
+	couples := make(map[uint32][]Couple)
+
+	// Process in chunks to avoid parameter limits
+	const chunkSize = 100
+	for i := 0; i < len(addresses); i += chunkSize {
+		end := i + chunkSize
+		if end > len(addresses) {
+			end = len(addresses)
+		}
+
+		chunk := addresses[i:end]
+		var fingerprints []Fingerprint
+
+		err := c.db.Where("address IN ?", chunk).Find(&fingerprints).Error
+		if err != nil {
+			return nil, fmt.Errorf("error querying database: %s", err)
+		}
+
+		// Group by address
+		for _, fp := range fingerprints {
+			couples[fp.Address] = append(couples[fp.Address], Couple{
+				AnchorTimeMs: fp.AnchorTimeMs,
+				SongID:       fp.SongID,
+			})
+		}
+	}
+
+	// Ensure all addresses have entries (even if empty)
+	for _, addr := range addresses {
+		if _, exists := couples[addr]; !exists {
+			couples[addr] = []Couple{}
+		}
+	}
+
+	return couples, nil
+}
+
+// TotalSongs returns the total number of songs
+func (c *PostgresClient) TotalSongs() (int, error) {
+	var count int64
+	err := c.db.Model(&Song{}).Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("error counting songs: %s", err)
+	}
+	return int(count), nil
+}
+
+// RegisterSong registers a new song in the database
+func (c *PostgresClient) RegisterSong(songTitle, songArtist, ytID string) (uint32, error) {
+	songID := utils.GenerateUniqueID()
+	songKey := utils.GenerateSongKey(songTitle, songArtist)
+
+	song := Song{
+		ID:     uint(songID),
+		Title:  songTitle,
+		Artist: songArtist,
+		YtID:   ytID,
+		Key:    songKey,
+	}
+
+	err := c.db.Transaction(func(tx *gorm.DB) error {
+		return tx.Create(&song).Error
 	})
 
-	fmt.Printf("Successfully stored %d fingerprints for song ID %d\n", len(dbFingerprints), songID)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") ||
+			strings.Contains(strings.ToLower(err.Error()), "unique constraint") {
+			return 0, fmt.Errorf("song with ytID or key already exists: %v", err)
+		}
+		return 0, fmt.Errorf("failed to register song: %v", err)
+	}
+
+	return songID, nil
 }
 
-// QueryFingerprints finds matching songs for a snippet's fingerprints
-func QueryFingerprints(snippetHashes []Fingerprint) (map[uint]map[float64]int, error) {
-	matches := make(map[uint]map[float64]int) // songID -> timeOffset -> count
+// GetSong retrieves a song by filter key (generic method)
+func (c *PostgresClient) GetSong(filterKey string, value interface{}) (Song, bool, error) {
+	validKeys := map[string]bool{
+		"id":    true,
+		"yt_id": true,
+		"key":   true,
+	}
 
-	for _, snippetHash := range snippetHashes {
-		var dbMatches []Fingerprint
-		
-		result := db.Where("hash = ?", int64(snippetHash.Hash)).Find(&dbMatches)
-		if result.Error != nil {
-			log.Printf("Error querying fingerprint hash %d: %v", snippetHash.Hash, result.Error)
-			continue
+	if !validKeys[filterKey] {
+		return Song{}, false, fmt.Errorf("invalid filter key: %s", filterKey)
+	}
+
+	var song Song
+	err := c.db.Where(fmt.Sprintf("%s = ?", filterKey), value).First(&song).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return Song{}, false, nil
 		}
-
-		// Process matches
-		for _, match := range dbMatches {
-			songID := match.SongID
-			// Calculate time offset between snippet and song
-			timeOffset := match.TimeStamp - snippetHash.TimeStamp
-
-			if matches[songID] == nil {
-				matches[songID] = make(map[float64]int)
-			}
-			matches[songID][timeOffset]++
-		}
+		return Song{}, false, fmt.Errorf("failed to retrieve song: %s", err)
 	}
 
-	return matches, nil
-}
-
-// CreateQuerySession creates a new query session and returns the ID
-func CreateQuerySession(duration float64, sampleRate int, peaks, pairs, hashes int) (string, error) {
-	// Generate a simple ID (you could use UUID library for better IDs)
-	sessionID := fmt.Sprintf("session_%d", time.Now().UnixNano())
-
-	session := QuerySession{
-		ID:            sessionID,
-		QueryDuration: duration,
-		SampleRate:    sampleRate,
-		TotalPeaks:    peaks,
-		TotalPairs:    pairs,
-		TotalHashes:   hashes,
-		MatchFound:    false,
-		QueryTime:     time.Now(),
-	}
-
-	result := db.Create(&session)
-	if result.Error != nil {
-		return "", fmt.Errorf("error creating query session: %w", result.Error)
-	}
-
-	return session.ID, nil
-}
-
-// UpdateQuerySessionResult updates the query session with results
-func UpdateQuerySessionResult(sessionID string, matchFound bool, bestSongID uint, matchScore int, timeInSong float64, processTime float64) error {
-	updates := QuerySession{
-		MatchFound:  matchFound,
-		MatchScore:  matchScore,
-		TimeInSong:  timeInSong,
-		ProcessTime: processTime,
-	}
-
-	if matchFound {
-		updates.BestMatchID = &bestSongID
-	}
-
-	result := db.Model(&QuerySession{}).Where("id = ?", sessionID).Updates(updates)
-	return result.Error
-}
-
-// StoreQueryResults stores individual query results
-func StoreQueryResults(sessionID string, results map[uint]map[float64]int) error {
-	for songID, offsets := range results {
-		// Find the most common offset and total matches
-		var bestOffset float64
-		var maxCount int
-		totalMatches := 0
-
-		for offset, count := range offsets {
-			totalMatches += count
-			if count > maxCount {
-				maxCount = count
-				bestOffset = offset
-			}
-		}
-
-		// Calculate confidence (percentage of total matches for this song)
-		confidence := float64(maxCount) / float64(totalMatches) * 100
-
-		// Store result
-		queryResult := QueryResult{
-			SessionID:      sessionID,
-			SongID:         songID,
-			MatchingHashes: totalMatches,
-			TimeOffset:     bestOffset,
-			Confidence:     confidence,
-		}
-
-		result := db.Create(&queryResult)
-		if result.Error != nil {
-			log.Printf("Error storing query result for song %d: %v", songID, result.Error)
-		}
-	}
-
-	return nil
+	return song, true, nil
 }
 
 // GetSongByID retrieves a song by ID
-func GetSongByID(songID uint) (*Song, error) {
-	var song Song
-	result := db.First(&song, songID)
-	if result.Error != nil {
-		return nil, fmt.Errorf("error fetching song: %w", result.Error)
-	}
-	return &song, nil
+func (c *PostgresClient) GetSongByID(songID uint32) (Song, bool, error) {
+	return c.GetSong("id", songID)
 }
 
-// GetAllSongs retrieves all songs with basic info
-func GetAllSongs() ([]Song, error) {
-	var songs []Song
-	result := db.Find(&songs)
-	if result.Error != nil {
-		return nil, fmt.Errorf("error fetching songs: %w", result.Error)
-	}
-	return songs, nil
+// GetSongByYTID retrieves a song by YouTube ID
+func (c *PostgresClient) GetSongByYTID(ytID string) (Song, bool, error) {
+	return c.GetSong("yt_id", ytID)
 }
 
-// DeleteSong deletes a song and all its fingerprints (CASCADE)
-func DeleteSong(songID uint) error {
-	result := db.Delete(&Song{}, songID)
-	if result.Error != nil {
-		return fmt.Errorf("error deleting song: %w", result.Error)
+// GetSongByKey retrieves a song by key
+func (c *PostgresClient) GetSongByKey(key string) (Song, bool, error) {
+	return c.GetSong("key", key)
+}
+
+// DeleteSongByID deletes a song by ID
+func (c *PostgresClient) DeleteSongByID(songID uint32) error {
+	err := c.db.Delete(&Song{}, songID).Error
+	if err != nil {
+		return fmt.Errorf("failed to delete song: %v", err)
 	}
-	
-	fmt.Printf("Deleted song ID %d and all its fingerprints\n", songID)
+	return nil
+}
+
+// DeleteCollection deletes a collection (table) from the database
+func (c *PostgresClient) DeleteCollection(collectionName string) error {
+	err := c.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", collectionName)).Error
+	if err != nil {
+		return fmt.Errorf("error deleting collection: %v", err)
+	}
 	return nil
 }
