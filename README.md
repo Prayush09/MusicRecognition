@@ -1,119 +1,18 @@
-# Audio Fingerprinting Algorithm
+### Re-creating Shazam Music Algorithm from Scratch
 
-## Project Overview
-This project explores the design of an audio fingerprinting system inspired by **Shazam’s algorithm** for song identification.  
-The goal is to analyze audio clips, generate unique acoustic fingerprints, and compare them against a database of known songs.  
+- This is not a normal readme file. It's more of a note-taking readme where I'll jot down
+  the details regarding what I am doing, how features I've implemented and what I learned
+- The debugging processes, and as the project scales in complexity these notes will help me keep track of the things that are required to stay on course to completing this project.
+- No AI assistance for code will be taken. Every single piece of code in this project will be thought thoroughly and written by me.
 
-**Supported Input Formats:**  
-- **WAV**: Uncompressed raw audio (PCM), ideal for direct analysis.  
-- **MP3**: Compressed format, requires decoding to PCM before processing.  
+## 21st September 2025 - 3:07 p.m.
 
-**Input Options:**  
-- Upload a **5-second clip** of an unknown song.  
-- Upload the **full song**.  
+- Need to thing through the file structure for this project.
+  - Let's write down the requirements that are needed to make this project.
+    1. The Recording/Uploading of songs and clips
+    2. The shazam magic 
+    3. The Matching process
+    4. The output 
 
-In both cases, the audio undergoes fingerprinting, hash generation, and matching against a fingerprint database.  
-
----
-
-## The Fingerprinting Process
-
-The fingerprinting pipeline transforms raw sound into a compact and searchable representation.  
-
-| Step | Description |
-|------|-------------|
-| **1. Time → Frequency Conversion** | Apply Fourier Transform to convert the time-domain waveform into a frequency-domain representation. |
-| **2. Spectral Peak Detection** | Identify the strongest frequency components within each time slice. These peaks capture the unique “signature” of a song. |
-| **3. Constellation Map Creation** | Plot detected peaks across the time–frequency plane. The result is a sparse constellation of points that define the song’s unique shape. |
-| **4. Hash Pair Generation** | Create unique hash identifiers by combining frequency peaks and their relative positions in time. |
-| **5. Database Storage** | Store millions of fingerprints efficiently in a searchable database. |
-| **6. Matching & Search** | Compare query hashes against the database to identify songs. |
-
----
-
-# Audio Chunking Strategy
-
-## Why Chunk Audio?
-Raw recordings are large and unsuitable for direct FFT analysis. For example:  
-- A 5-second recording at 44.1kHz = **220,500 samples**.  
-- A single FFT over the entire buffer would give excellent frequency resolution but very poor time resolution.  
-
-**Solution:** Split the signal into smaller **chunks** for balanced resolution.  
-
-## Chunk Parameters
-| Parameter | Value |
-|-----------|-------|
-| Total samples | 220,500 |
-| Number of chunks | 256 |
-| Samples per chunk | ~861 |
-| Duration per chunk | ~19.5 ms |
-| Frequency resolution | ~51 Hz/bin |
-
-## Trade-Offs
-- **Larger chunks**: Better frequency resolution, worse time resolution.  
-- **Smaller chunks**: Better time resolution, worse frequency resolution.  
-- **Chosen size (~861 samples)**: Balanced compromise for tracking rapid audio changes while preserving musical frequency detail.  
-
-**Optimization Note:** FFTs perform best with power-of-2 lengths. Chunks may be zero-padded to 1024 samples to improve efficiency.  
-
----
-
-# FFT Algorithm Insights
-
-## Why FFT?
-The **Discrete Fourier Transform (DFT)** converts time-domain signals into frequency components, but it is computationally expensive (O(N²)).  
-The **Fast Fourier Transform (FFT)** reduces complexity to O(N log N), enabling real-time audio analysis.  
-
-## FFT Variants Used
-| Input Size | Algorithm | Characteristics |
-|------------|-----------|-----------------|
-| Power-of-2 | Radix-2 FFT (Cooley–Tukey) | Efficient divide-and-conquer algorithm |
-| Non-power-of-2 | Bluestein FFT | Converts DFT into convolution, then solved with radix-2 FFT |
-
-## Frequency Resolution
-- For ~861-sample chunks:  
-  - Frequency resolution ≈ **44,100 Hz / 861 ≈ 51 Hz per bin**  
-  - Sufficient to differentiate musical notes and harmonics.  
-
-## Temporal Resolution
-- Each chunk covers ~**19.5 ms**.  
-- Provides enough granularity to track quick changes in audio.  
-- Essential for reliable fingerprinting.  
-
----
-
-# Key Concepts in Fingerprinting
-
-| Concept | Explanation |
-|---------|-------------|
-| **Spectral Peaks** | Strongest frequency components in each chunk. These form the raw “landmarks” of a fingerprint. |
-| **Constellation Map** | A sparse 2D plot of peaks across time and frequency. Each song has a unique constellation pattern. |
-| **Hash Generation** | Fingerprints are generated by pairing peaks (anchor point + target point), encoding frequency & time differences. |
-| **Database Storage** | Fingerprints are compact enough to store millions of songs, allowing rapid lookup. |
-| **Matching** | Query hashes are compared against the database. High overlap of hashes = strong match. |
-
----
-
-# Current Development Notes
-
-- **Format Handling:**  
-  - **MP3**: Testing TBD. Implemented.
-
-- **Next Step:**  
-  - Finalize **hash matching and database search** to complete the recognition pipeline.  
-
----
-
-# Validation Criteria
-- **Frequency Resolution**: Sufficient to separate musical notes.  
-- **Temporal Resolution**: Fine enough to track short audio events.  
-- **Scalability**: Efficient for millions of fingerprints.  
-- **Robustness**: Works across noisy environments and compressed formats.  
-- **Bug Fixing**: Built a custom-build spectrogram visulizer to fix the FFT scaling issue.
----
-
-# References
-- Bluestein, L. (1970). *A linear filtering approach to the computation of discrete Fourier transform*  
-- Cooley, J.W.; Tukey, J.W. (1965). *An algorithm for the machine calculation of complex Fourier series*  
-- Lyons, R.G. *Understanding Digital Signal Processing*  
-- Smith, S.W. *The Scientist and Engineer's Guide to DSP*  
+- Can use FFMEG to process MP3 files and also record clips. 
+- Implement this feature first. [Base]
