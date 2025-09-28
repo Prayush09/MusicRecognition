@@ -32,12 +32,15 @@ then we batch the peak points into another chunk and generate a hash for that ch
 - For any song upload we are going to convert it into wav format. This ensures standardization of the whole process for the shazam algo.
 
 
-## 27th September 2025 - 12:48 p.m - 1:06 p.m.
+## 27th September 2025 - 12:48 p.m - 1:06 p.m. 
 
 - Will start by creating a record feature for the clip, a upload feature for the song, then a converter to wav for any format to wav and then wav processing for our Shazam Magic Pipeline.
 
 - Step 1 : Installing FFMPEG (done)
 
-- Step 2 : Figure out how to use FFMEG to Store a 10 second clip in memory. (on going)
+- Step 2 : Figure out how to use FFMEG to Store a 10 second clip in memory. 
+  - 28th Sept - 11:00 p.m. - 11:31 p.m.
+           - Faced with a design choice now, Should I create a 10 sec buffer audio clip or store it properly inside a physical location. 
+           - Buffer one seems to me the correct choice cause when the algo is going through the clip it can't listen to any other clip until the whole process is done.
 
--Step 3 : Now try creating a format change function using ffmeg to convert a given clip or song (used for both) into WAV (Next task)
+- Step 3 : Now try creating a format change function using ffmeg to convert a given clip or song (used for both) into WAV (Next task)
