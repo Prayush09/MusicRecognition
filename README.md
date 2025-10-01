@@ -44,3 +44,19 @@ then we batch the peak points into another chunk and generate a hash for that ch
            - Buffer one seems to me the correct choice cause when the algo is going through the clip it can't listen to any other clip until the whole process is done.
 
 - Step 3 : Now try creating a format change function using ffmeg to convert a given clip or song (used for both) into WAV (Next task)
+
+## Winter Arc Begins - 1st Oct 2025 5:18 P.M (In mumbai ;)
+
+- After a heavy look up into similar projects I now understand that the listening part of the project will be done on the client side and therefore I will have to implement the listening thing when I create the frontend of the project. 
+
+- For backend we can assume that the frontend will be sending us audio data and then we will have to convert that into WAV format.
+
+- So My first task is to complete the transformation of reading and writing raw audio data into WAV Format and saving them.
+
+- In my understanding of the code base I learnt that FFMPED is a cross platform conversion library that is useful to convert files not record them. 
+
+- We can use different libraries for recording and then convert it properly into different format using FFMPEG. It's like photoshop but in a code base.
+
+- Main Package named "shazoom" ;)
+
+- 
