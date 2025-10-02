@@ -59,4 +59,14 @@ then we batch the peak points into another chunk and generate a hash for that ch
 
 - Main Package named "shazoom" ;)
 
-- 
+- completed a convert function that takes in recording data sent by frontend and turns it into WAV format file and stores it and return the directory of the output file.
+
+## 2nd Oct 2025 4:05 P.M (in mumbai)
+- Now I need to create functions to extract data (metadata like sample rate, channels, bits per sample) from WAV files to use for our song recog algo.
+
+- Creating wav.go, defining structure of WAV header (for writing and parsing raw WAV files)
+  - WriteWAVHeader() for metadata
+  - WriteWAVFile() for PCMData Extraction. (will use ffprobe [Part of FFMPEG] for metadata extraction)
+  - ProcessRecording -> Will take the raw data provided by the frontend, will convert the file format to wav (build earlier), then will process the metadata and then create sample (float64) and return them for fingerprinting process.
+
+  

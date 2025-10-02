@@ -2,7 +2,6 @@ package fileformat
 
 import (
 	"fmt"
-
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,7 +44,7 @@ func ConvertToWAV(inputFilePath string, channels int) (wavFilePath string, err e
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to convert into WAV, err : %v, output: %v", err, string(output))
+		return "", fmt.Errorf("failed to convert into wav, err : %v, output: %v", err, string(output))
 	}
 
 	//copy temp file contents into output
