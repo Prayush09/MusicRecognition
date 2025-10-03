@@ -69,4 +69,12 @@ then we batch the peak points into another chunk and generate a hash for that ch
   - WriteWAVFile() for PCMData Extraction. (will use ffprobe [Part of FFMPEG] for metadata extraction)
   - ProcessRecording -> Will take the raw data provided by the frontend, will convert the file format to wav (build earlier), then will process the metadata and then create sample (float64) and return them for fingerprinting process.
 
-  
+- Alright completed the WAV header structure and writing to header. 
+
+## 3rd Oct 2025 4:00 P.M
+ 
+- Completed the wav file writing function and also the extraction of wav info from filepath function. 
+
+- Completed the extraction and normalization into float64 from raw PCM data (convert to signed 16 bit integer and then normalized into float64 [-1.0 to 1.0]) 
+
+- Next step is to complete the wav processing by adding the metadata extraction from raw file
