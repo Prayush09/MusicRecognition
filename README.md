@@ -73,8 +73,14 @@ then we batch the peak points into another chunk and generate a hash for that ch
 
 ## 3rd Oct 2025 4:00 P.M
  
-- Completed the wav file writing function and also the extraction of wav info from filepath function. 
+- Completed the wav file writing function and also the extraction of wav info from filepath function. (required during wav processing)
 
-- Completed the extraction and normalization into float64 from raw PCM data (convert to signed 16 bit integer and then normalized into float64 [-1.0 to 1.0]) 
+- Completed the extraction and normalization into float64 from raw PCM data (convert to signed 16 bit integer and then normalized into float64 [-1.0 to 1.0]) (required during wav processing)
 
-- Next step is to complete the wav processing by adding the metadata extraction from raw file
+- Next step is to complete the wav processing by adding the metadata extraction from raw file and then completing the whole flow in the final processRecording function. [6:07 p.m]
+
+## 5th Oct 2025 8:30 P.M
+
+- Completed the processing of an incoming file using ffprobe.
+- Tested the function to see if the processing of the song details are happening correctly [passed]
+- Now going to complete the processing of the song function that takes in a file and then process it correctly for the main shazam function
