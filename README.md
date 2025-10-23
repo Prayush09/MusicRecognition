@@ -71,7 +71,7 @@ then we batch the peak points into another chunk and generate a hash for that ch
 
 - Alright completed the WAV header structure and writing to header. 
 
-## 3rd Oct 2025 4:00 P.M
+## 3rd Oct 2025 4:00 P.M.
  
 - Completed the wav file writing function and also the extraction of wav info from filepath function. (required during wav processing)
 
@@ -79,8 +79,32 @@ then we batch the peak points into another chunk and generate a hash for that ch
 
 - Next step is to complete the wav processing by adding the metadata extraction from raw file and then completing the whole flow in the final processRecording function. [6:07 p.m]
 
-## 5th Oct 2025 8:30 P.M
+## 5th Oct 2025 8:30 P.M.
 
 - Completed the processing of an incoming file using ffprobe.
 - Tested the function to see if the processing of the song details are happening correctly [passed]
 - Now going to complete the processing of the song function that takes in a file and then process it correctly for the main shazam function
+
+
+## 23rd Oct 2025 4:07 P.M.
+
+- After a long break, figuring out what did I do last time round and what was I planning to do. Going through this readme file is very helpful. Though I believe I have not noted down what needs to be done once I come back.
+
+- Going through the commit history, I have completed the processing part of any audio clip or song. Now I can start working on the actual shazoom algorithm.
+
+- So we require basically a spectrogram of the song. Heat signatures which can then produce anchor points in the songs as well as the sample which will be sent to us. 
+
+- We can then based on those anchor points compare the relative timing between the sample's anchor times and the song anchor times, and give score to each. 
+
+- Basically: 
+            1. Analize the audio sample given (spectrogram -> peaks -> fingerprinting). 
+            2. use the fingerprints to find matching song in DB. (match timestamps & targetZones with songs)
+            3. Filter matches based on relative timing of anchor b/w sample and song.
+            4. Assign scores to these potential matches and return the list of matches in decreasing order.
+            5. show these on the client side as matches: 1. 2. 3. (etc)
+
+- Working on creating the spectrogram -> peaks -> fingerprinting pipeline.
+
+- Alright completed Low filter function today for the spectrogram. 
+TODO: 
+- Need to complete the downsample function so the sample is finally ready for the spectrogram analysis.
