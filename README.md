@@ -108,3 +108,9 @@ then we batch the peak points into another chunk and generate a hash for that ch
 - Alright completed Low filter function today for the spectrogram. 
 TODO: 
 - Need to complete the downsample function so the sample is finally ready for the spectrogram analysis.
+
+## 24th Oct 2025 3:07 P.M
+
+- Starting work on downsample function which will basically reduce the number of samples we have from 44k to 11k. This is essential to make sure I only use the important samples for fingerprinting and not use all the different noise present in the sample/song.
+
+- 
