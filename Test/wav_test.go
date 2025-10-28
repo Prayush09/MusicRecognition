@@ -1,4 +1,4 @@
-package fileformat_test
+package test
 
 import (
 	"encoding/base64"
