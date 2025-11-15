@@ -15,20 +15,20 @@ func RenameFile(sourcePath, destinationPath string) error {
 	//get the source file
 	srcFile, err := os.Open(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to open source path!: %v", err)
+		return fmt.Errorf("renamefile: failed to open source path!: %v", err)
 	}
 
 	//get the destination file
 	destFile, err := os.Open(destinationPath)
 	if err != nil {
-		return fmt.Errorf("failed to destination path!: %v", err)
+		return fmt.Errorf("renamefile: failed to destination path!: %v", err)
 	}
 	defer destFile.Close()
 
 	//copy contents from source file into destination file
 	_, err = io.Copy(destFile, srcFile)
 	if err != nil {
-		return fmt.Errorf("cannot copy src into dest: %v", err)
+		return fmt.Errorf("renamefile: cannot copy src into dest: %v", err)
 	}
 
 	//close source file

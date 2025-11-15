@@ -40,16 +40,16 @@ func writeWavHeader(file *os.File, data []byte, sampleRate, channels, bitsPerSam
 		return fmt.Errorf("invalid data or invalid no of channels")
 	}
 
-	subHeaderChunkSize := uint16(16)
+	subHeaderChunkSize := uint32(16)
 	bytesPerSample := bitsPerSample / 8
 	blockAlign := uint16(bytesPerSample * channels)
-	subDataChunk := uint16(len(data))
+	subDataChunk := uint32(len(data))
 
 	header := WavHeader{
 		ChunkID:       [4]byte{'R', 'I', 'F', 'F'}, //flag to say this is a RIFF file — read the next chunk sizes and types accordingly.
 		ChunkSize:     uint32(36 + len(data)),      //size of header + data
 		Format:        [4]byte{'W', 'A', 'V', 'E'}, //flag for format of file type
-		Subchunk1ID:   [4]byte{'F', 'M', 'T', ' '}, //flag for meta data format
+		Subchunk1ID:   [4]byte{'f', 'm', 't', ' '}, //flag for meta data format
 		Subchunk1Size: uint32(subHeaderChunkSize),
 		AudioFormat:   uint16(1), //PCM Format
 		NumChannels:   uint16(channels),
@@ -57,7 +57,7 @@ func writeWavHeader(file *os.File, data []byte, sampleRate, channels, bitsPerSam
 		BytesPerSec:   uint32(channels * sampleRate * bytesPerSample), //streaming speed
 		BlockAlign:    blockAlign,
 		BitsPerSample: uint16(bitsPerSample),
-		Subchunk2ID:   [4]byte{'D', 'A', 'T', 'A'}, //flag for data
+		Subchunk2ID:   [4]byte{'d', 'a', 't', 'a'}, //flag for data
 		Subchunk2Size: uint32(subDataChunk),
 	}
 

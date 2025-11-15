@@ -140,5 +140,15 @@ TODO:
 === RUN   TestPipelineConsistency
 --- PASS: TestPipelineConsistency (0.28s)
 
-## 2nd Nov 2025 1.21 P.M.
+## 5nd Nov 2025 11.21 P.M.
 
+- Working on getting the peaks and setting up anchor points
+
+## 13-14th Nov 2025 11.00 A.M - 12:28 A.M
+
+- Completed the redundant Conversion to Wav and Reformat Wav function into one.
+
+## 15 Nov 2025 5:05 P.M 
+
+- spent time getting the wav - conversion to samples pipleline tested, found bugs and did remediation required.
+- For detailed debugging documentation, see [DEBUGGING.md](./DEBUGGING.md)

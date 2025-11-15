@@ -129,6 +129,8 @@ type Peak struct{
 	Freq complex128 //frequency at that time
 }
 
+
+//Provide us with all the major peaks that exceed avg maximum frequency threshold in the spectrogram
 func ExtractPeaks(spectrogram [][]complex128, audioDuration float64) []Peak {
 	if len(spectrogram) < 1 {
 		return []Peak{}
@@ -140,9 +142,11 @@ func ExtractPeaks(spectrogram [][]complex128, audioDuration float64) []Peak {
 		freqIndex int
 	}
 
+	//different bands to classify frequency with.
 	bands := []struct{min, max int}{{0,10}, {10,20}, {20,40}, {40,80}, {80,160}, {160,512}}
 
 	var peaks []Peak
+	//audio duration / no. of division in the spectrogram will give us each bin's duration.
 	binDuration := audioDuration / float64(len(spectrogram))
 
 	for binIdx, bin := range spectrogram {
