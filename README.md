@@ -212,4 +212,9 @@ then we batch the peak points into another chunk and generate a hash for that ch
 - Since my goal is to deploy this application for everyone to use I need to think in terms of architecture within GCP environment.
 - Awesome news -> Just created CloudSQL(PostgreSQL) server on GCP. Using the enterprise plus addition as it is free for 30 days. Perfect for my application and use since in 30 days I will run out of credits (lol). 
 - Configured the CloudSQL 
-- Creating Data base schema using PrismaORM
+- Creating Data base schema.
+
+- Matches datastructure format: 
+    * $$\text{matches} = \{ \underbrace{\text{Song ID}}_{\text{uint32 Key}}: [\underbrace{[\text{Sample Time}, \text{DB Time}]}_{\text{Match Pair 1}},\underbrace{[\text{Sample Time}, \text{DB Time}]}_{\text{Match Pair 2}}, ...] \}$$
+
+- Figure out which type of data structure will be required optimally do the fingerprinting with 

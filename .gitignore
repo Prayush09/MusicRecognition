@@ -1,2 +1,6 @@
 .env
-test/testdata
+test/testdata/
+*.o
+*.out
+/vendor
+/pkg
