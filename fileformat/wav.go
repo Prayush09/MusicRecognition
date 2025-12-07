@@ -100,10 +100,12 @@ func WriteWavFile(filename string, data []byte, sampleRate, channels, bitsPerSam
 }
 
 type WavInfo struct {
-	Channels   int
-	SampleRate int
-	Data       []byte
-	Duration   float64
+	Channels            int
+	SampleRate          int
+	Data                []byte
+	Duration            float64
+	LeftChannelSamples  []float64
+	RightChannelSamples []float64
 }
 
 func ReadWavInfo(filename string) (*WavInfo, error) {
@@ -126,19 +128,49 @@ func ReadWavInfo(filename string) (*WavInfo, error) {
 		return nil, errors.New("invalid header format")
 	}
 
-	//if all checks pass => extract info
 	info := &WavInfo{
 		Channels:   int(header.NumChannels),
 		SampleRate: int(header.SampleRate),
 		Data:       data[44:],
 	}
 
-	//caluclate duration
-	if header.BitsPerSample == 16 {
-		info.Duration = float64(len(info.Data)) / float64(int(header.NumChannels)*2*int(header.SampleRate))
-	} else {
-		return nil, errors.New("unsupported bits per sample format")
+	if header.BitsPerSample != 16 {
+		return nil, errors.New("unsupported bits per sample format (expect 16-bit PCM)")
 	}
+
+	sampleCount := len(info.Data) / 2
+	int16Buf := make([]int16, sampleCount)
+	if err := binary.Read(bytes.NewReader(info.Data), binary.LittleEndian, int16Buf); err != nil {
+		return nil, err
+	}
+
+	const scale = 1.0 / 32768.0 // 16-bit normalisation factor
+
+	switch header.NumChannels {
+	case 1:
+		left := make([]float64, sampleCount)
+		for i, s := range int16Buf {
+			left[i] = float64(s) * scale
+		}
+		info.LeftChannelSamples = left
+
+	case 2:
+		frameCount := sampleCount / 2
+		left := make([]float64, frameCount)
+		right := make([]float64, frameCount)
+		for i := 0; i < frameCount; i++ {
+			left[i] = float64(int16Buf[2*i]) * scale
+			right[i] = float64(int16Buf[2*i+1]) * scale
+		}
+		info.LeftChannelSamples = left
+		info.RightChannelSamples = right
+
+	default:
+		return nil, errors.New("unsupported channel count (only mono/stereo)")
+	}
+
+	info.Duration = float64(sampleCount) /
+		(float64(header.NumChannels) * float64(header.SampleRate))
 
 	return info, nil
 }
@@ -163,8 +195,6 @@ func WavBytesToSample(data []byte) ([]float64, error) {
 
 	return output, nil
 }
-
-//Extracting audio data from the incoming audio file, json structure returned by ffprobe
 
 type FFMPEGMetaData struct {
 	Streams []struct {
@@ -227,6 +257,7 @@ func GetMetadata(filepath string) (FFMPEGMetaData, error) {
 
 	return metadata, nil
 }
+
 
 func ProcessRecording(recData *models.RecordData, saveRecording bool) ([]float64, error) {
 	audioData, err := base64.StdEncoding.DecodeString(recData.Audio)

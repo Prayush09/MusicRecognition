@@ -1,18 +1,5 @@
 package core
 
-import (
-	"fmt"
-	"math"
-	"math/cmplx"
-)
-
-const (
-	downSampleRatio = 4
-	freqBinSize = 1024
-	maxFreq     = 5000.0 //5 kHz
-	hopSize     = 32
-)
-
 /*
 This code implements audio fingerprinting through spectral analysis.
  It processes audio signals by filtering, downsampling, and extracting frequency peaks
@@ -24,177 +11,185 @@ This code implements audio fingerprinting through spectral analysis.
  3. Short-Time Fourier Transform (STFT) with Hamming windowing to convert audio into a spectrogram
  4. Peak extraction across frequency bands to identify the most significant spectral features
 */
-func Spectrogram(sample []float64, sampleRate int) ([][]complex128, error) {
-	//cleaning and down sizing the sample to make it ready for fingerprinting.
-	filteredSample := LowFilterPass(sample, maxFreq, float64(sampleRate))
-	downsampledSample, err := DownSample(filteredSample, sampleRate, sampleRate/downSampleRatio)
-	if err != nil {
-		return nil, fmt.Errorf("error occurred while down sampling: %v", err)
-	}
 
-	numOfWindows := len(downsampledSample) / (freqBinSize - hopSize)
-	spectrogram := make([][]complex128, numOfWindows)
+import (
+	"errors"
+	"fmt"
+	"math"
+	"math/cmplx"
+)
 
-	//hamming window formulae = 0.54 - 0.46 * cos(2π * i / (N - 1)) || Used to taper the signal at both ends of the window.
-	window := make([]float64, freqBinSize)
-	for i := range window {
-		window[i] = 0.54 - 0.46 * math.Cos(2*math.Pi * float64(i) / (float64(freqBinSize) - 1))
-	}
+const (
+    downSampleRatio = 4
+    freqBinSize     = 1024           
+    maxFreq         = 5000.0 
+    hopSize         = freqBinSize / 2 
+    windowType      = "hanning"      // another window type can be hamming 
+)
 
-	//performing STFT
-	for i := 0; i < numOfWindows; i++ {
-		start := i * hopSize
-		end := start + freqBinSize
-		if end > len(downsampledSample) {
-			end = len(downsampledSample)
-		}
 
-		bin := make([]float64, freqBinSize)
-		copy(bin, downsampledSample[start : end])
+func Spectrogram(sample []float64, sampleRate int) ([][]float64, error) {
+    filteredSample := LowPassFilter(maxFreq, float64(sampleRate), sample)
 
-		//apply hamming window
-		for j := range window {
-			bin[j] *= window[j] 
-		}
+    downsampledSample, err := Downsample(filteredSample, sampleRate, sampleRate/downSampleRatio)
+    if err != nil {
+        return nil, fmt.Errorf("couldn't downsample audio sample: %v", err)
+    }
 
-		//apply FFT(time -> frequency) to this bin then add to spectrogram.
-		spectrogram[i] = FFT(bin)
-	}
+    window := make([]float64, freqBinSize)
+    for i := range window {
+        theta := 2 * math.Pi * float64(i) / float64(freqBinSize-1)
+        switch windowType {
+        case "hamming":
+            window[i] = 0.54 - 0.46*math.Cos(theta)
+        default: // Hanning window
+            window[i] = 0.5 - 0.5*math.Cos(theta)
+        }
+    }
 
-	return spectrogram, nil
+    spectrogram := make([][]float64, 0)
+
+    for start := 0; start+freqBinSize <= len(downsampledSample); start += hopSize {
+        end := start + freqBinSize
+        frame := make([]float64, freqBinSize)
+        copy(frame, downsampledSample[start:end])
+        for j := range window {
+            frame[j] *= window[j]
+        }        
+        fftResult := FFT(frame) 
+        magnitude := make([]float64, len(fftResult)/2) // Only take the first half (Nyquist limit - non-redundant frequency information is contained only in the first half of the FFT output,)
+        for j := range magnitude {
+            magnitude[j] = cmplx.Abs(fftResult[j])
+        }
+
+        spectrogram = append(spectrogram, magnitude)
+    }
+
+    return spectrogram, nil
 }
 
-func LowFilterPass(sample []float64, cutoffFrequency, sampleRate float64) []float64 {
-	rc := 1.0 / (2.0 * math.Pi * cutoffFrequency) //Resistor Capacitor Time constant - determines how fast the capacitor charges/discharges, which determines the cutoff frequency.
-	dt := 1.0 / sampleRate                        //time between sample[0] and sample[1]
-	alpha := dt / (rc + dt)                       //smoothning factor
-	/*
-		alpha will be a number between 0 and 1 that determines how much filtering happens:
-			If alpha ≈ 1: almost no filtering (signal passes through)
-			If alpha ≈ 0: heavy filtering (lots of smoothing)
-	*/
+func LowPassFilter(cutoffFrequency, sampleRate float64, input []float64) []float64 {
+    rc := 1.0 / (2.0 * math.Pi * cutoffFrequency)
+    dt := 1.0 / sampleRate                     
+    alpha := dt / (rc + dt)                    
 
-	filteredSignal := make([]float64, len(sample))
+    filteredSignal := make([]float64, len(input))
 
-	var prevOutput float64 = 0
-	for i, x := range sample {
-		if i == 0 {
-			//first sample - just apply the smoothning factor
-			filteredSignal[i] = alpha * x
-		} else {
-			//Update change based on current and previous sample frequencies.
-			filteredSignal[i] = alpha*x + (1-alpha)*prevOutput
-		}
-		prevOutput = filteredSignal[i]
-	}
+    var prevOutput float64 = 0
+    for i, x := range input {
+        if i == 0 {
+            filteredSignal[i] = x * alpha
+        } else {
+            // y[i] = alpha * x[i] + (1 - alpha) * y[i-1]
+            filteredSignal[i] = alpha*x + (1-alpha)*prevOutput
+        }
+        prevOutput = filteredSignal[i]
+    }
 
-	return filteredSignal
+    return filteredSignal
 }
 
-//normalizing (taking avg) the values in sample input provided in ratio's of say 4 if org sample is 44k and target is 11k. Sending back this smaller data
-func DownSample(sample []float64, originalSampleRate, targetSampleRate int) ([]float64, error) {
-	if targetSampleRate <= 0 || originalSampleRate <= 0 {
-		return nil,fmt.Errorf("provided sample rates must be positive");
-	}
+func Downsample(input []float64, originalSampleRate, targetSampleRate int) ([]float64, error) {
+    if targetSampleRate <= 0 || originalSampleRate <= 0 {
+        return nil, errors.New("sample rates must be positive")
+    }
 
-	if targetSampleRate > originalSampleRate {
-		return nil, fmt.Errorf("target sample rate must be <= original sample rate");
-	}
+    if targetSampleRate > originalSampleRate {
+        return nil, errors.New("target sample rate must be less than or equal to original sample rate")
+    }
 
-	ratio := originalSampleRate / targetSampleRate
-	
-	var downSampled []float64
-	for i := 0; i < len(sample); i += ratio {
-		end := i + ratio;
-		if end > len(sample){
-			end = len(sample)
-		}
+    ratio := originalSampleRate / targetSampleRate
+    if ratio <= 0 {
+        return nil, errors.New("invalid ratio calculated from sample rates")
+    }
 
-		sum := 0.0
-		for j := 0; j < end; j++{
-			sum += sample[j];
-		}
+    var resampled []float64
+    for i := 0; i < len(input); i += ratio {
+        end := i + ratio
+        if end > len(input) {
+            end = len(input)
+        }
 
-		avg := sum / float64(end-i) 
-		downSampled = append(downSampled, avg)
-	}
+        sum := 0.0
+        for j := i; j < end; j++ {
+            sum += input[j]
+        }
 
-	return downSampled, nil
+        avg := sum / float64(end-i)
+        resampled = append(resampled, avg)
+    }
+
+    return resampled, nil
 }
 
-
-
-type Peak struct{
-	Time float64 //At what point in time did the peak happened
-	Freq complex128 //frequency at that time
+// Peak - a point of interest in spectrogram
+type Peak struct {
+    Time float64 // Time in seconds
+    Freq float64 // Frequency in Hz
 }
 
+//create an array of collections of peaks
+func ExtractPeaks(spectrogram [][]float64, audioDuration float64, sampleRate int) []Peak {
+    if len(spectrogram) < 1 {
+        return []Peak{}
+    }
 
-//Provide us with all the major peaks that exceed avg maximum frequency threshold in the spectrogram
-func ExtractPeaks(spectrogram [][]complex128, audioDuration float64) []Peak {
-	if len(spectrogram) < 1 {
-		return []Peak{}
-	}
+    type maxies struct {
+        maxMag  float64
+        freqIdx int
+    }
 
-	type maxFreq struct {
-		mag float64
-		freq complex128
-		freqIndex int
-	}
+    bands := []struct{ min, max int }{
+        {0, 10}, {10, 20}, {20, 40}, {40, 80}, {80, 160}, {160, 512},
+    }
 
-	//different bands to classify frequency with.
-	bands := []struct{min, max int}{{0,10}, {10,20}, {20,40}, {40,80}, {80,160}, {160,512}}
+    var peaks []Peak
+    frameDuration := audioDuration / float64(len(spectrogram))
+    effectiveSampleRate := float64(sampleRate) / float64(downSampleRatio)
+    freqResolution := effectiveSampleRate / float64(freqBinSize)
 
-	var peaks []Peak
-	//audio duration / no. of division in the spectrogram will give us each bin's duration.
-	binDuration := audioDuration / float64(len(spectrogram))
+    for frameIdx, frame := range spectrogram {
+        var maxMags []float64
+        var freqIndices []int
 
-	for binIdx, bin := range spectrogram {
-		var maxMags []float64
-		var maxFreqs []complex128
-		var freqIndices []float64
+        binBandMaxies := []maxies{}
+        for _, band := range bands {
+            var maxx maxies
+            var maxMag float64 = -1.0 
+            for idx, mag := range frame[band.min:band.max] {
+                if mag > maxMag {
+                    maxMag = mag
+                    freqIdx := band.min + idx
+                    maxx = maxies{mag, freqIdx}
+                }
+            }
+            if maxx.maxMag > 0 {
+                binBandMaxies = append(binBandMaxies, maxx)
+            }
+        }
 
-		binBandMax := []maxFreq{}
-		for _, band := range bands {
-			var max maxFreq
-			var maxMag float64
-			for idx, freq := range bin[band.min : band.max] {
-				magnitude := cmplx.Abs(freq)
-				if magnitude > maxMag {
-					maxMag = magnitude
-					freqIdx := band.min + idx
-					max = maxFreq{magnitude, freq, freqIdx}
-				}
-			}
-			binBandMax = append(binBandMax, max)
-		}
+        for _, value := range binBandMaxies {
+            maxMags = append(maxMags, value.maxMag)
+            freqIndices = append(freqIndices, value.freqIdx)
+        }
+        var maxMagsSum float64
+        for _, max := range maxMags {
+            maxMagsSum += max
+        }
+        if len(maxMags) == 0 {
+            continue
+        }
+        avg := maxMagsSum / float64(len(maxMags))
+        for i, value := range maxMags {
+            //selected peak > avg(peaks) (like it is for getting a job these day lol)
+            if value > avg {
+                peakTime := float64(frameIdx) * frameDuration
+                peakFreq := float64(freqIndices[i]) * freqResolution
 
-		for _, value := range binBandMax {
-			maxMags = append(maxMags, value.mag)
-			maxFreqs = append(maxFreqs, value.freq)
-			freqIndices = append(freqIndices, float64(value.freqIndex))
-		}
+                peaks = append(peaks, Peak{Time: peakTime, Freq: peakFreq})
+            }
+        }
+    }
 
-		//calculate average magnitude
-		var magSum float64
-		for _, value := range maxMags{
-			magSum += value
-		}
-
-		avg := magSum/float64(len(maxFreqs))
-
-		//Add peaks that exceed the average of max magnitudes
-		for i, value := range maxMags {
-			if value > avg {
-				peakTimeInBin := freqIndices[i] * binDuration / float64(len(bin))
-				
-				//absolute time of peak
-				peakTime := float64(binIdx) * binDuration + peakTimeInBin
-
-				peaks = append(peaks, Peak{Time: peakTime, Freq: maxFreqs[i]})
-			}
-		}
-	}
-
-	return peaks
+    return peaks
 }

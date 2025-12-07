@@ -1,3 +1,48 @@
+package core
+
+import (
+	"math"
+)
+
+func FFT(input []float64) []complex128 {
+	complexArray := make([]complex128, len(input))
+	for k, v := range input {
+		complexArray[k] = complex(v, 0)
+	}
+	return recursiveFFT(complexArray)
+}
+
+func recursiveFFT(input []complex128) []complex128 {
+	n := len(input)
+	//base case
+	if n <= 1 {
+		return input
+	}
+
+	even := make([]complex128, n/2)
+	odd := make([]complex128, n/2)
+
+	for i := 0; i < n/2; i++ {
+		even[i] = input[2*i]
+		odd[i] = input[2*i+1]
+	}
+
+	//divide
+	even = recursiveFFT(even)
+	odd = recursiveFFT(odd)
+
+	fftResult := make([]complex128, n)
+
+	for k := 0; k < n/2; k++ {
+		angle := -2 * math.Pi * float64(k) / float64(n)
+		t := complex(math.Cos(angle), math.Sin(angle))
+		fftResult[k] = even[k] + t*odd[k]     //lower frequencies
+		fftResult[k+n/2] = even[k] - t*odd[k] //higher frequencies
+	}
+
+	return fftResult
+}
+
 /*
 Package core provides digital signal processing functionality for audio analysis and fingerprinting.
 This file implements the Fast Fourier Transform (FFT), a fundamental algorithm for converting
@@ -45,47 +90,3 @@ Implementation Notes:
 - Twiddle factors are computed using Euler's formula: e^(iθ) = cos(θ) + i·sin(θ)
 - The output is an array of complex numbers representing frequency components
 */
-package core
-
-import (
-	"math"
-)
-
-func FFT(input []float64) []complex128 {
-	complexArray := make([]complex128, len(input))
-	for k, v := range input {
-		complexArray[k] = complex(v, 0)
-	}
-	return recursiveFFT(complexArray)
-}
-
-func recursiveFFT(input []complex128) []complex128 {
-	n := len(input)
-	//base case
-	if n <= 1 {
-		return input
-	}
-
-	even := make([]complex128, n/2)
-	odd := make([]complex128, n/2)
-
-	for i := 0; i < n/2; i++ {
-		even[i] = input[2*i]
-		odd[i] = input[2*i + 1]
-	}
-
-	//divide
-	even = recursiveFFT(even)
-	odd = recursiveFFT(odd)
-
-	fftResult := make([]complex128, n)
-
-	for k := 0; k < n/2; k++ {
-		angle := -2 * math.Pi * float64(k) / float64(n)
-        t := complex(math.Cos(angle), math.Sin(angle))
-		fftResult[k] = even[k] + t*odd[k] //lower frequencies
-		fftResult[k+n/2] = even[k] - t * odd[k] //higher frequencies
-	}
-
-	return fftResult
-}

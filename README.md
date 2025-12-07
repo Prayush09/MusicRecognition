@@ -104,9 +104,8 @@ then we batch the peak points into another chunk and generate a hash for that ch
             5. show these on the client side as matches: 1. 2. 3. (etc)
 
 - Working on creating the spectrogram -> peaks -> fingerprinting pipeline.
-
+> Choosing hanning or hamming window for spectral leakage (reference: [https://www.youtube.com/watch?v=PiFFY3CtKmw&t=389s])
 - Alright completed Low filter function today for the spectrogram. 
-TODO: 
 - Need to complete the downsample function so the sample is finally ready for the spectrogram analysis.
 
 ## 24th Oct 2025 3:07 P.M.
@@ -152,3 +151,65 @@ TODO:
 
 - spent time getting the wav - conversion to samples pipleline tested, found bugs and did remediation required.
 - For detailed debugging documentation, see [DEBUGGING.md](./DEBUGGING.md)
+
+
+## 4th Dec 2025 (while flying :) 
+
+- spent time going through the test build, & need to generate test which can test the whole process.
+
+## 5th Dec 2025 
+
+- Need to create test for the whole pipeline and start building the fingerprinting process right after
+
+❯ go test -v
+=== RUN   TestFullPipeline
+    integration_test.go:13: Starting TestFullPipeline with real audio data.
+    common.go:75: Successfully processed 4058168 samples from 92.02 second recording
+    integration_test.go:32: Truncating audio to 441000 samples (10.0s) for testing.
+    integration_test.go:35: Successfully fetched 441000 samples at 44100 Hz (10.00s duration)
+    integration_test.go:50: Generated spectrogram with 111 time windows and 1024 frequency bins
+    integration_test.go:62: Extracted 111 peaks from spectrogram
+--- PASS: TestFullPipeline (14.40s)
+**PASS**
+**ok      shazoom/test    14.862s**
+
+- Awesome, so now that the spectrogram is working.
+
+## 6th Dec 2025 
+
+- TODO LIST 
+    * [X] Complete the fingerprinting prococess to generate hashes (Till now we are just creating a heatmap)
+    * [X] Complete Address function that creates a unique hash that will be used in fingerprinting
+    * [X] Test the fingerprinting process now with the hashes. 
+
+- Address formula 
+  * ![Formula](image.png)
+
+- Test Log: 
+=== RUN   TestFullPipeline
+    integration_test.go:12: Starting TestFullPipeline with real audio data.
+    common.go:75: Successfully processed 4058168 samples from 92.02 second recording
+    integration_test.go:27: Truncating audio to 441000 samples (10.0s) for testing.
+    integration_test.go:30: Successfully fetched 441000 samples at 44100 Hz (10.00s duration)
+    integration_test.go:45: Generated spectrogram with 214 time windows and 512 frequency bins
+    integration_test.go:57: Extracted 522 peaks from spectrogram
+    integration_test.go:104: Generated 3565 total fingerprints. Logging 5 sample hashes:
+    integration_test.go:107: Sample Hash #1: 0x5D81405C (Decimal: 1568751708)
+    integration_test.go:107: Sample Hash #2: 0x170B005C (Decimal: 386596956)
+    integration_test.go:107: Sample Hash #3: 0x0289C0B9 (Decimal: 42582201)
+    integration_test.go:107: Sample Hash #4: 0x2E8100B9 (Decimal: 780206265)
+    integration_test.go:107: Sample Hash #5: 0x0182005C (Decimal: 25296988)
+--- PASS: TestFullPipeline (0.55s)
+**PASS**
+**ok      shazoom/test    1.171s**
+
+- Awesome news, fingerprinting works. Next time I am here, we are doing matching and testing it. Then we will move to the frontend!
+
+## 7th Dec 2025
+
+- Time to create matching functions (Main logic and integrate DB)
+- Looking at options to setup the cloud database (Firestore, CloudSQL, NeonDB)
+- Since my goal is to deploy this application for everyone to use I need to think in terms of architecture within GCP environment.
+- Awesome news -> Just created CloudSQL(PostgreSQL) server on GCP. Using the enterprise plus addition as it is free for 30 days. Perfect for my application and use since in 30 days I will run out of credits (lol). 
+- Configured the CloudSQL 
+- Creating Data base schema using PrismaORM
