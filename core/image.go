@@ -25,8 +25,8 @@ func SpectrogramToImage(spectrogram [][]complex128, outputPath string) error {
 
 	//finding the max mag to create different intesity points in the heat map
 	maxMagnitude := 0.0
-	for i := 0; i < numOfWindows; i++ {
-		for j := 0; j < numFreqBins; j++ {
+	for i := range numOfWindows {
+		for j := range numFreqBins {
 			magnitude := cmplx.Abs(spectrogram[i][j])
 			if magnitude > maxMagnitude {
 				maxMagnitude = magnitude
@@ -36,8 +36,8 @@ func SpectrogramToImage(spectrogram [][]complex128, outputPath string) error {
 	}
 
 	//making sure intensity lies in between 0 and 255 | (0 = black/quiet, 255 = white/loud)
-	for i := 0; i < numOfWindows; i++ {
-		for j := 0; j < numFreqBins; j++ {
+	for i := range numOfWindows {
+		for j := range numFreqBins {
 			magnitude := cmplx.Abs(spectrogram[i][j])
 			intensity := uint8(math.Floor(255 * (magnitude / maxMagnitude)))
 			img.SetGray(j, i, color.Gray{Y: intensity}) //adding intensity into each specified location.

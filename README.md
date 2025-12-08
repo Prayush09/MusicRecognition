@@ -218,3 +218,8 @@ then we batch the peak points into another chunk and generate a hash for that ch
     * $$\text{matches} = \{ \underbrace{\text{Song ID}}_{\text{uint32 Key}}: [\underbrace{[\text{Sample Time}, \text{DB Time}]}_{\text{Match Pair 1}},\underbrace{[\text{Sample Time}, \text{DB Time}]}_{\text{Match Pair 2}}, ...] \}$$
 
 - Figure out which type of data structure will be required optimally do the fingerprinting with 
+
+## 8th Dec 2025
+- 1. Working on getting the matches logic completed [x]
+- 2. Trying to establish connection with the CloudSQL Cluster.[ ]
+- 3. Creating Test suit for the full pipeline after Step 2 is completed [ ]
