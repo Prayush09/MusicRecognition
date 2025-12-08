@@ -7,7 +7,7 @@ import (
 	"shazoom/models"
 	"shazoom/utils"
 	"strings"
-	//"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type PostgresClient struct {
@@ -32,6 +32,7 @@ func NewPostgresClient(dsn string) (*PostgresClient, error) {
 		return nil, fmt.Errorf("error creating tables: %w", err)
 	}
 
+	fmt.Printf("successfully created postgreSQL client and created tables")
 	return &PostgresClient{db: db}, nil
 }
 

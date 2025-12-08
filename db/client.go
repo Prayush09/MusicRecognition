@@ -29,8 +29,8 @@ type Song struct {
 func NewDBClient() (DBClient, error) {
 	var (
 			dbUser = utils.GetEnv("DB_USER", "postgres")
-			dbPass = utils.GetEnv("DB_PASS", "password")
-			dbHost = utils.GetEnv("DB_HOST", "localhost") // This will be your Cloud SQL Public IP
+			dbPass = utils.GetEnv("DB_PASS", "")
+			dbHost = utils.GetEnv("DB_HOST", "34.100.143.210") 
 			dbPort = utils.GetEnv("DB_PORT", "5432")
 			dbName = utils.GetEnv("DB_NAME", "postgres")
 		)

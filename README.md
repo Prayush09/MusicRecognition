@@ -221,5 +221,18 @@ then we batch the peak points into another chunk and generate a hash for that ch
 
 ## 8th Dec 2025
 - 1. Working on getting the matches logic completed [x]
-- 2. Trying to establish connection with the CloudSQL Cluster.[ ]
-- 3. Creating Test suit for the full pipeline after Step 2 is completed [ ]
+- 2. Trying to establish connection with the CloudSQL Cluster.[x]
+- 3. Creating Test suit for the creation of tables [x]
+
+TODO: For tom
+- The connections works now so I am confident in implementing a test in which we can process a whole song and store fingerprints on CloudSQL.
+- Implement that test and then we can move to the front-end of the project.
+- The test will help us in integrating parts of the front-end with backend.
+- Will have to create WASM as well for that so delve into the architecture.
+
+- Test Log: 
+  === RUN   TestNewPostgresClient
+  successfully created postgreSQL client and created tables    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:77: Successfully connected, tables created, and database is queryable. Total songs: 0
+  --- PASS: TestNewPostgresClient (0.54s)
+  PASS
+  ok      shazoom/test    1.021s
