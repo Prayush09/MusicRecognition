@@ -6,38 +6,36 @@ import (
 
 func FFT(input []float64) []complex128 {
 	complexArray := make([]complex128, len(input))
-	for k, v := range input {
-		complexArray[k] = complex(v, 0)
+	for i, v := range input {
+		complexArray[i] = complex(v, 0)
 	}
-	return recursiveFFT(complexArray)
+
+	fftResult := make([]complex128, len(complexArray))
+	copy(fftResult, complexArray)
+	return recursiveFFT(fftResult)
 }
 
-func recursiveFFT(input []complex128) []complex128 {
-	n := len(input)
-	//base case
-	if n <= 1 {
-		return input
+func recursiveFFT(complexArray []complex128) []complex128 {
+	N := len(complexArray)
+	if N <= 1 {
+		return complexArray
 	}
 
-	even := make([]complex128, n/2)
-	odd := make([]complex128, n/2)
-
-	for i := 0; i < n/2; i++ {
-		even[i] = input[2*i]
-		odd[i] = input[2*i+1]
+	even := make([]complex128, N/2)
+	odd := make([]complex128, N/2)
+	for i := 0; i < N/2; i++ {
+		even[i] = complexArray[2*i]
+		odd[i] = complexArray[2*i+1]
 	}
 
-	//divide
 	even = recursiveFFT(even)
 	odd = recursiveFFT(odd)
 
-	fftResult := make([]complex128, n)
-
-	for k := 0; k < n/2; k++ {
-		angle := -2 * math.Pi * float64(k) / float64(n)
-		t := complex(math.Cos(angle), math.Sin(angle))
-		fftResult[k] = even[k] + t*odd[k]     //lower frequencies
-		fftResult[k+n/2] = even[k] - t*odd[k] //higher frequencies
+	fftResult := make([]complex128, N)
+	for k := 0; k < N/2; k++ {
+		t := complex(math.Cos(-2*math.Pi*float64(k)/float64(N)), math.Sin(-2*math.Pi*float64(k)/float64(N)))
+		fftResult[k] = even[k] + t*odd[k]
+		fftResult[k+N/2] = even[k] - t*odd[k]
 	}
 
 	return fftResult

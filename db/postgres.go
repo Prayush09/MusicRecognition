@@ -41,10 +41,9 @@ func (c *PostgresClient) Close() error {
 }
 
 func createPostgresTables(db *sql.DB) error {
-	// Postgres uses SERIAL for auto-increment and specific types
 	createSongsTable := `
 	CREATE TABLE IF NOT EXISTS songs (
-		id SERIAL PRIMARY KEY,
+		id BIGINT PRIMARY KEY,
 		title TEXT NOT NULL,
 		artist TEXT NOT NULL,
 		"ytID" TEXT, 
@@ -55,9 +54,9 @@ func createPostgresTables(db *sql.DB) error {
 	// Note: We use a composite primary key to avoid exact duplicates
 	createFingerprintsTable := `
 	CREATE TABLE IF NOT EXISTS fingerprints (
-		address INTEGER NOT NULL,
+		address BIGINT NOT NULL,
 		"anchorTimeMs" INTEGER NOT NULL,
-		"songID" INTEGER NOT NULL,
+		"songID" BIGINT NOT NULL,
 		PRIMARY KEY (address, "anchorTimeMs", "songID")
 	);
 	
@@ -76,50 +75,68 @@ func createPostgresTables(db *sql.DB) error {
 }
 
 func (c *PostgresClient) StoreFingerprints(fingerprints map[uint32]models.Couple) error {
-	tx, err := c.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+    if len(fingerprints) == 0 {
+        return nil
+    }
 
-	// Postgres uses $1, $2, $3 syntax
-	// ON CONFLICT DO NOTHING handles duplicates gracefully
-	stmt, err := tx.Prepare(`
-		INSERT INTO fingerprints (address, "anchorTimeMs", "songID") 
-		VALUES ($1, $2, $3) 
-		ON CONFLICT (address, "anchorTimeMs", "songID") DO NOTHING
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+    const batchSize = 20000 // Max fingerprints per batch (20,000 * 3 = 60,000 parameters < 65,535 limit)
+    
+    tx, err := c.db.Begin()
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
 
-	for address, couple := range fingerprints {
-		if _, err := stmt.Exec(address, couple.AnchorTime, couple.SongId); err != nil {
-			return err
-		}
-	}
+    currentBatch := make(map[uint32]models.Couple, batchSize)
+    count := 0
+    paramIndex := 1 // Parameter index ($1, $2, $3, ...) must reset for each new query/batch
 
-	return tx.Commit()
+    for address, couple := range fingerprints {
+        currentBatch[address] = couple
+        count++
+		
+        if count == batchSize || len(currentBatch) == len(fingerprints) {
+            
+            //Execute batch insertion
+            valueStrings := make([]string, 0, len(currentBatch))
+            valueArgs := make([]any, 0, len(currentBatch) * 3)
+            paramIndex = 1
+
+            for addr, cpl := range currentBatch {
+                valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", paramIndex, paramIndex+1, paramIndex+2)) 
+                valueArgs = append(valueArgs, int64(addr), cpl.AnchorTime, int64(cpl.SongId))
+                paramIndex += 3
+            }
+
+            insertQuery := fmt.Sprintf(`
+                INSERT INTO fingerprints (address, "anchorTimeMs", "songID") 
+                VALUES %s 
+                ON CONFLICT (address, "anchorTimeMs", "songID") DO NOTHING
+            `, strings.Join(valueStrings, ","))
+            
+            if _, err = tx.Exec(insertQuery, valueArgs...); err != nil {
+                return err
+            }
+            //End batch insertion
+
+            //Reset
+            currentBatch = make(map[uint32]models.Couple, batchSize)
+            count = 0
+        }
+    }
+
+    // Since all batches were executed successfully within the transaction, commit the whole thing.
+    return tx.Commit()
 }
 
 func (c *PostgresClient) GetCouples(addresses []uint32) (map[uint32][]models.Couple, error) {
 	couples := make(map[uint32][]models.Couple)
 
-	// Since we can't easily pass a slice to SQL, we loop or use specific handling.
-	// For simplicity in this implementation, we simply query. 
-	// PERFORMANCE NOTE: For high volume, use "github.com/lib/pq".Array() or build a dynamic IN clause.
-	// Below is a dynamic IN clause builder.
-
 	if len(addresses) == 0 {
 		return couples, nil
 	}
 
-	// Build query: SELECT ... WHERE address IN ($1, $2, $3...)
 	query := `SELECT "anchorTimeMs", "songID", address FROM fingerprints WHERE address = ANY($1)`
-	
-	// Postgres driver can handle slices with ANY() if passed correctly, 
-	// but strictly implementation-dependent. The safest standard way for pgx/stdlib:
 	
 	rows, err := c.db.Query(query, addresses)
 	if err != nil {
@@ -129,10 +146,16 @@ func (c *PostgresClient) GetCouples(addresses []uint32) (map[uint32][]models.Cou
 
 	for rows.Next() {
 		var couple models.Couple
-		var address uint32
-		if err := rows.Scan(&couple.AnchorTime, &couple.SongId, &address); err != nil {
+		var dbSongID int64
+		var dbAddress int64
+
+		if err := rows.Scan(&couple.AnchorTime, &dbSongID, &dbAddress); err != nil {
 			return nil, err
 		}
+
+		couple.SongId = uint32(dbSongID)
+		address := uint32(dbAddress)
+		
 		couples[address] = append(couples[address], couple)
 	}
 
@@ -152,16 +175,13 @@ func (c *PostgresClient) RegisterSong(songTitle, songArtist, ytID string) (uint3
 	}
 	defer tx.Rollback()
 
-	songID := utils.GenerateUniqueID() // Assuming this returns uint32
+	songID := utils.GenerateUniqueID()
 	songKey := utils.GenerateSongKey(songTitle, songArtist)
 
-	// Note: We insert our own Generated ID, ensuring the DB respects it.
-	// Postgres syntax uses $ placeholders.
 	query := `INSERT INTO songs (id, title, artist, "ytID", key) VALUES ($1, $2, $3, $4, $5)`
 	
-	_, err = tx.Exec(query, songID, songTitle, songArtist, ytID, songKey)
+	_, err = tx.Exec(query, int64(songID), songTitle, songArtist, ytID, songKey)
 	if err != nil {
-		// Basic duplicate check based on error string, or use pgx specific error codes
 		if strings.Contains(err.Error(), "duplicate key") {
 			return 0, fmt.Errorf("song already exists: %w", err)
 		}
@@ -175,7 +195,6 @@ func (c *PostgresClient) RegisterSong(songTitle, songArtist, ytID string) (uint3
 }
 
 func (c *PostgresClient) GetSong(filterKey string, value interface{}) (Song, bool, error) {
-	// Whitelist keys to prevent SQL injection
 	validKeys := map[string]bool{"id": true, "ytID": true, "key": true}
 	if !validKeys[filterKey] {
 		return Song{}, false, fmt.Errorf("invalid filter key")
@@ -200,7 +219,7 @@ func (c *PostgresClient) GetSong(filterKey string, value interface{}) (Song, boo
 	return song, true, nil
 }
 
-// Wrapper methods to satisfy interface
+
 func (c *PostgresClient) GetSongByID(id uint32) (Song, bool, error) { return c.GetSong("id", id) }
 func (c *PostgresClient) GetSongByYTID(id string) (Song, bool, error) { return c.GetSong("ytID", id) }
 func (c *PostgresClient) GetSongByKey(k string) (Song, bool, error) { return c.GetSong("key", k) }

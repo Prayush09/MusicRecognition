@@ -234,5 +234,40 @@ TODO: For tom
   === RUN   TestNewPostgresClient
   successfully created postgreSQL client and created tables    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:77: Successfully connected, tables created, and database is queryable. Total songs: 0
   --- PASS: TestNewPostgresClient (0.54s)
-  PASS
-  ok      shazoom/test    1.021s
+  PASS shazoom/test  1.021s
+
+## 9th Dec 2025
+
+- Tested the fingerprints generation with DB (Success!)
+  - Test Logs (only the last parts): 
+    *     /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:179: Successfully stored fingerprints to DB :) --- PASS: TestNewPostgresClient (1.90s) PASS-2.387s
+
+- Last test for backend (MAIN TEST)
+  * Build a test on shazoom to listen to a 10-15 second clip then utilize the shazoom functions to match and figure out the song 
+
+- A problem that I ran into: The number of fingerprints generated per peaks are pretty low. But I am taking the decision that it's okay for now as we are not making a commercial application. But ideally per song there should be 25-30k fingerprints. My algo is producing only 3k-5k.
+
+- Fixed. The issue was in passing the correct data to the pipeline. I was processing the mp3 and then passing that mp3 only :DUMB: but yeah. I created another function to directly pass the samples, and now I am getting good enough fingerprints.
+
+- Test Log: 
+  === RUN   TestNewPostgresClient
+successfully created postgreSQL client and created tables    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:74: Successfully registered song to DB with Song ID: 1008504485
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:77: Starting TestFullPipeline with real audio data.
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/common.go:75: Successfully processed 11648053 samples from 264.13 second recording
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:85: Successfully fetched 11648053 samples at 44100 Hz (264.13s duration)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:100: Generated spectrogram with 5686 time windows and 512 frequency bins
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:112: Extracted 13603 peaks from spectrogram
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:156: Generated 49362 total fingerprints. Logging 5 sample hashes:
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:159: Sample Hash #1: 0x228B8145 (Decimal: 579567941)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:159: Sample Hash #2: 0x13998000 (Decimal: 328826880)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:159: Sample Hash #3: 0x2393422D (Decimal: 596853293)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:159: Sample Hash #4: 0x068BC22D (Decimal: 109822509)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:159: Sample Hash #5: 0x130501D0 (Decimal: 319095248)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/db_client_test.go:167: Successfully stored fingerprints to DB :)
+--- PASS: TestNewPostgresClient (4.92s)
+PASS
+ok      shazoom/test    5.133s (YIPEE)
+
+- Fixed it using batch inserting (2000) at a time, still able to process 260s length song with 49k fingerprints in under 5 seconds!
+
+- Feeling proud indian army HEHE

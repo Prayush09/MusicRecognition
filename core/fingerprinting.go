@@ -2,35 +2,33 @@ package core
 
 import (
 	"fmt"
-	"shazoom/fileformat"
+	wav "shazoom/fileformat"
 	"shazoom/models"
 	"shazoom/utils"
 )
 
-// 32 bits availabe => 9 bits for anchor, 9 bits for target and 14 bits for time Delta. 5 such addresses of target peaks per anchor peak.
 const (
-	maxFreqBits = 9
-	maxDeltaBits = 14
-	targetZoneSize = 5
+	maxFreqBits    = 9
+	maxDeltaBits   = 14
+	targetZoneSize = 20
 )
 
-//functions to implement - Fingerprint (Takes peaks and songId, generate fingerprints(address[Hash] and couple[anchorTime and Id]) and returns a map that links the couple with the address)
-//creating Address - Implementing a function to create address (unique hash)
-// Core Logic Function GenerateFingerprints (Song => Wav => spectrogram => Fingerprints)
-func Fingerprint(peaks []Peak, songId uint32) map[uint32]models.Couple {	
+// Fingerprint generates fingerprints from a list of peaks and stores them in a map.
+// Each fingerprint consists of an address (hash) and a couple (anchor time + song ID).
+func Fingerprint(peaks []Peak, songID uint32) map[uint32]models.Couple {
 	fingerprints := map[uint32]models.Couple{}
 
-	//go through the peaks
-	for i, anchor := range peaks{  
-		for j := i + 1; j < len(peaks) && j <= i + targetZoneSize; j++{ //making sure the target peak is not too far away from the anchor peak
+	for i, anchor := range peaks {
+		// Search the "target zone" (next targetZoneSize peaks)
+		for j := i + 1; j < len(peaks) && j <= i+targetZoneSize; j++ {
 			target := peaks[j]
 
 			address := createAddress(anchor, target)
-			anchorTimeMs := uint32(anchor.Time * 1000) 
+			anchorTimeMs := uint32(anchor.Time * 1000)
 
 			fingerprints[address] = models.Couple{
 				AnchorTime: anchorTimeMs,
-				SongId: songId,
+				SongId:     songID,
 			}
 		}
 	}
@@ -38,58 +36,91 @@ func Fingerprint(peaks []Peak, songId uint32) map[uint32]models.Couple {
 	return fingerprints
 }
 
-//Our address will contain three core things (anchor frequency bits, target frequency bits and the time delta in between these bits which will allow for a quick matching)
+// createAddress generates a unique address (hash) for a pair of anchor and target points.
 func createAddress(anchor, target Peak) uint32 {
-	//Make the frequency digestable
-	anchorFreqBin := uint32(anchor.Freq / 10) 
+	// Note: Assuming Peak has float64 Freq and Time members (as inferred from your usage)
+	anchorFreqBin := uint32(anchor.Freq / 10) // Scale down to fit in 9 bits
 	targetFreqBin := uint32(target.Freq / 10)
+
 	deltaMsRaw := uint32((target.Time - anchor.Time) * 1000)
 
-	//masking bins to range
-	anchorFreqBits := anchorFreqBin & ((1 << maxFreqBits) - 1)
-	targetFreqBits := targetFreqBin & ((1 << maxFreqBits) - 1)
-	deltaTimeBits := deltaMsRaw & ((1 << maxDeltaBits) - 1)
+	// Mask to fit within bit constraints
+	anchorFreqBits := anchorFreqBin & ((1 << maxFreqBits) - 1) // 9 bits (0 to 511)
+	targetFreqBits := targetFreqBin & ((1 << maxFreqBits) - 1) // 9 bits
+	deltaBits := deltaMsRaw & ((1 << maxDeltaBits) - 1)        // 14 bits (max ~16 seconds)
 
-	//creating a unique address from anchor, target and delta bits [MSB - AnchorBits (23-31) | TargetBits (22-14) | Delta (13-0) (LSB)]
-	address := (anchorFreqBits << 23) | (targetFreqBits << 14) | deltaTimeBits
+	// Combine into 32-bit address
+	// Layout: [9 bits Anchor Freq] [9 bits Target Freq] [14 bits Delta Time]
+	address := (anchorFreqBits << 23) | (targetFreqBits << 14) | deltaBits
 
 	return address
 }
 
-//core function to implement the whole pipeline
-func GenerateFingerprints(songPath string, songId uint32) (map[uint32]models.Couple, error){
-	//TODO: Need to a way to figure out if the incoming audio is stereo (channel == 2) or mono (channel == 1)
-	wavFilePath, err := fileformat.ConvertToWAV(songPath, 1)
-	if err != nil {
-		return nil, fmt.Errorf("error converting input file to WAV, %v", err)
+// GenerateFingerprints processes pre-loaded audio samples to generate fingerprints.
+// This is the function you should use in your tests now.
+func GenerateFingerprintsFromSamples(samples []float64, sampleRate int, songID uint32) (map[uint32]models.Couple, error) {
+	if len(samples) == 0 {
+		return nil, fmt.Errorf("samples slice is empty")
 	}
 
-	wavInfo, err := fileformat.ReadWavInfo(wavFilePath)
+	// Calculate duration based on samples and sample rate
+	duration := float64(len(samples)) / float64(sampleRate)
+
+	fingerprints := make(map[uint32]models.Couple)
+
+	// 1. Spectrogram and Peak Extraction
+	spectro, err := Spectrogram(samples, sampleRate)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching WAV infor, %v", err)
+		return nil, fmt.Errorf("error creating spectrogram: %w", err)
 	}
 
-	//make fingerprint map
-	fingerprint := make(map[uint32]models.Couple)
+	peaks := ExtractPeaks(spectro, duration, sampleRate)
 
+	// 2. Fingerprinting
+	utils.ExtendMap(fingerprints, Fingerprint(peaks, songID))
+
+	// NOTE: If you need to handle stereo channels, you would need to adjust how
+	// the calling test function provides the samples (e.g., provide both channels).
+	// Assuming the test provides the mono/mixed samples now.
+
+	return fingerprints, nil
+}
+
+// GenerateFingerprintsFromFile is the original function, modified to handle file reading
+// and channel separation for a complete implementation.
+func GenerateFingerprints(songFilePath string, songID uint32) (map[uint32]models.Couple, error) {
+	// The previous implementation used ConvertToWAV with channels=1, effectively mixing or taking the left channel.
+	wavFilePath, err := wav.ConvertToWAV(songFilePath, 2) // Convert to stereo to be safe
+	if err != nil {
+		return nil, fmt.Errorf("error converting input file to WAV: %w", err)
+	}
+
+	wavInfo, err := wav.ReadWavInfo(wavFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading WAV info: %w", err)
+	}
+
+	fingerprints := make(map[uint32]models.Couple)
+
+	// Left Channel Processing
 	spectro, err := Spectrogram(wavInfo.LeftChannelSamples, wavInfo.SampleRate)
 	if err != nil {
-		return nil, fmt.Errorf("error creating spectrogram: %v", err)
+		return nil, fmt.Errorf("error creating spectrogram: %w", err)
 	}
 
 	peaks := ExtractPeaks(spectro, wavInfo.Duration, wavInfo.SampleRate)
-	utils.ExtendMap(fingerprint, Fingerprint(peaks, songId)) //transfer the function returned map data into our local map 
+	utils.ExtendMap(fingerprints, Fingerprint(peaks, songID))
 
+	// Right Channel Processing (if stereo)
 	if wavInfo.Channels == 2 {
 		spectro, err = Spectrogram(wavInfo.RightChannelSamples, wavInfo.SampleRate)
 		if err != nil {
-			return nil, fmt.Errorf("error creating spectrogram for right channel: %v", err)
+			return nil, fmt.Errorf("error creating spectrogram for right channel: %w", err)
 		}
 
 		peaks = ExtractPeaks(spectro, wavInfo.Duration, wavInfo.SampleRate)
-		utils.ExtendMap(fingerprint, Fingerprint(peaks, songId))
+		utils.ExtendMap(fingerprints, Fingerprint(peaks, songID))
 	}
 
-	return fingerprint, nil
+	return fingerprints, nil
 }
-

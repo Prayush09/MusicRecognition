@@ -87,7 +87,7 @@ func FindMatchesUsingFingerPrints(sample map[uint32]uint32) ([]Match, time.Durat
 		}
 	}
 
-	matches = filterMatches(10, matches, targetZones)
+	//matches = filterMatches(10, matches, targetZones)
 	
 	//scoring logic
 	scores := analyzeRelativeTiming(matches)
