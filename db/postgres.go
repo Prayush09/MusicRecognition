@@ -1,12 +1,12 @@
 package db
 
 import (
-	//"context"
 	"database/sql"
 	"fmt"
 	"shazoom/models"
 	"shazoom/utils"
 	"strings"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -32,7 +32,7 @@ func NewPostgresClient(dsn string) (*PostgresClient, error) {
 		return nil, fmt.Errorf("error creating tables: %w", err)
 	}
 
-	fmt.Printf("successfully created postgreSQL client and created tables")
+	fmt.Printf("successfully created postgreSQL client and created tables\n")
 	return &PostgresClient{db: db}, nil
 }
 
@@ -42,27 +42,27 @@ func (c *PostgresClient) Close() error {
 
 func createPostgresTables(db *sql.DB) error {
 	createSongsTable := `
-	CREATE TABLE IF NOT EXISTS songs (
-		id BIGINT PRIMARY KEY,
-		title TEXT NOT NULL,
-		artist TEXT NOT NULL,
-		"ytID" TEXT, 
-		key TEXT NOT NULL UNIQUE
-	);`
+    CREATE TABLE IF NOT EXISTS songs (
+        id BIGINT PRIMARY KEY,
+        title TEXT NOT NULL,
+        artist TEXT NOT NULL,
+        "ytID" TEXT, 
+        key TEXT NOT NULL UNIQUE
+    );`
 
 	// Fingerprints table
-	// Note: We use a composite primary key to avoid exact duplicates
+	// Note: address is BIGINT (int64) to handle full range of hash values safely
 	createFingerprintsTable := `
-	CREATE TABLE IF NOT EXISTS fingerprints (
-		address BIGINT NOT NULL,
-		"anchorTimeMs" INTEGER NOT NULL,
-		"songID" BIGINT NOT NULL,
-		PRIMARY KEY (address, "anchorTimeMs", "songID")
-	);
-	
-	-- Optional: Create an index on address for faster matching speed
-	CREATE INDEX IF NOT EXISTS idx_fingerprints_address ON fingerprints (address);
-	`
+    CREATE TABLE IF NOT EXISTS fingerprints (
+        address BIGINT NOT NULL,
+        "anchorTimeMs" INTEGER NOT NULL,
+        "songID" BIGINT NOT NULL,
+        PRIMARY KEY (address, "anchorTimeMs", "songID")
+    );
+    
+    -- Index on address for faster matching speed
+    CREATE INDEX IF NOT EXISTS idx_fingerprints_address ON fingerprints (address);
+    `
 
 	if _, err := db.Exec(createSongsTable); err != nil {
 		return fmt.Errorf("creating songs table: %w", err)
@@ -74,68 +74,72 @@ func createPostgresTables(db *sql.DB) error {
 	return nil
 }
 
-func (c *PostgresClient) StoreFingerprints(fingerprints map[uint32]models.Couple) error {
-    if len(fingerprints) == 0 {
-        return nil
-    }
+// StoreFingerprints now accepts map[int64]... to align with BIGINT in DB
+func (c *PostgresClient) StoreFingerprints(fingerprints map[int64]models.Couple) error {
+	if len(fingerprints) == 0 {
+		return nil
+	}
 
-    const batchSize = 20000 // Max fingerprints per batch (20,000 * 3 = 60,000 parameters < 65,535 limit)
-    
-    tx, err := c.db.Begin()
-    if err != nil {
-        return err
-    }
-    defer tx.Rollback()
+	const batchSize = 20000 // Max fingerprints per batch
+	
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-    currentBatch := make(map[uint32]models.Couple, batchSize)
-    count := 0
-    paramIndex := 1 // Parameter index ($1, $2, $3, ...) must reset for each new query/batch
-
-    for address, couple := range fingerprints {
-        currentBatch[address] = couple
-        count++
+	currentBatch := make(map[int64]models.Couple, batchSize)
+	count := 0
+	
+	for address, couple := range fingerprints {
+		currentBatch[address] = couple
+		count++
 		
-        if count == batchSize || len(currentBatch) == len(fingerprints) {
-            
-            //Execute batch insertion
-            valueStrings := make([]string, 0, len(currentBatch))
-            valueArgs := make([]any, 0, len(currentBatch) * 3)
-            paramIndex = 1
+		// If batch is full or we are at the end of the map
+		if count == batchSize || len(currentBatch) == len(fingerprints) {
+			
+			// Execute batch insertion
+			valueStrings := make([]string, 0, len(currentBatch))
+			valueArgs := make([]any, 0, len(currentBatch) * 3)
+			paramIndex := 1
 
-            for addr, cpl := range currentBatch {
-                valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", paramIndex, paramIndex+1, paramIndex+2)) 
-                valueArgs = append(valueArgs, int64(addr), cpl.AnchorTime, int64(cpl.SongId))
-                paramIndex += 3
-            }
+			for addr, cpl := range currentBatch {
+				// addr is already int64, cpl.SongId is uint32 (cast to int64)
+				valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", paramIndex, paramIndex+1, paramIndex+2)) 
+				valueArgs = append(valueArgs, addr, cpl.AnchorTime, int64(cpl.SongId))
+				paramIndex += 3
+			}
 
-            insertQuery := fmt.Sprintf(`
+			insertQuery := fmt.Sprintf(`
                 INSERT INTO fingerprints (address, "anchorTimeMs", "songID") 
                 VALUES %s 
                 ON CONFLICT (address, "anchorTimeMs", "songID") DO NOTHING
             `, strings.Join(valueStrings, ","))
-            
-            if _, err = tx.Exec(insertQuery, valueArgs...); err != nil {
-                return err
-            }
-            //End batch insertion
+			
+			if _, err = tx.Exec(insertQuery, valueArgs...); err != nil {
+				return err
+			}
 
-            //Reset
-            currentBatch = make(map[uint32]models.Couple, batchSize)
-            count = 0
-        }
-    }
+			// Reset batch
+			// Note: Re-slicing fingerprints map logic needs care in Go loop, 
+			// but since we iterate 'range fingerprints', we just clear 'currentBatch'.
+			currentBatch = make(map[int64]models.Couple, batchSize)
+			count = 0
+		}
+	}
 
-    // Since all batches were executed successfully within the transaction, commit the whole thing.
-    return tx.Commit()
+	return tx.Commit()
 }
 
-func (c *PostgresClient) GetCouples(addresses []uint32) (map[uint32][]models.Couple, error) {
-	couples := make(map[uint32][]models.Couple)
+// GetCouples now accepts []int64 and returns map[int64]... to match DB types
+func (c *PostgresClient) GetCouples(addresses []int64) (map[int64][]models.Couple, error) {
+	couples := make(map[int64][]models.Couple)
 
 	if len(addresses) == 0 {
 		return couples, nil
 	}
 
+	// The query uses ANY($1) where $1 is an array of BIGINTs
 	query := `SELECT "anchorTimeMs", "songID", address FROM fingerprints WHERE address = ANY($1)`
 	
 	rows, err := c.db.Query(query, addresses)
@@ -149,14 +153,16 @@ func (c *PostgresClient) GetCouples(addresses []uint32) (map[uint32][]models.Cou
 		var dbSongID int64
 		var dbAddress int64
 
+		// Scan into matching Postgres types (INTEGER -> int, BIGINT -> int64)
 		if err := rows.Scan(&couple.AnchorTime, &dbSongID, &dbAddress); err != nil {
 			return nil, err
 		}
 
+		// Safe to cast SongID back to uint32 (it's an ID)
 		couple.SongId = uint32(dbSongID)
-		address := uint32(dbAddress)
 		
-		couples[address] = append(couples[address], couple)
+		// Keep address as int64 for the map key
+		couples[dbAddress] = append(couples[dbAddress], couple)
 	}
 
 	return couples, nil
@@ -180,6 +186,7 @@ func (c *PostgresClient) RegisterSong(songTitle, songArtist, ytID string) (uint3
 
 	query := `INSERT INTO songs (id, title, artist, "ytID", key) VALUES ($1, $2, $3, $4, $5)`
 	
+	// Explicitly cast songID (uint32) to int64 for BIGINT column
 	_, err = tx.Exec(query, int64(songID), songTitle, songArtist, ytID, songKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -200,7 +207,7 @@ func (c *PostgresClient) GetSong(filterKey string, value interface{}) (Song, boo
 		return Song{}, false, fmt.Errorf("invalid filter key")
 	}
 
-	// Note the quotes around "ytID" because mixed case columns in Postgres need quotes
+	// Handle case sensitivity for ytID column
 	if filterKey == "ytID" {
 		filterKey = `"ytID"`
 	}
@@ -219,13 +226,21 @@ func (c *PostgresClient) GetSong(filterKey string, value interface{}) (Song, boo
 	return song, true, nil
 }
 
+// Helpers: Cast IDs to int64 where necessary
+func (c *PostgresClient) GetSongByID(id uint32) (Song, bool, error) { 
+	return c.GetSong("id", int64(id)) 
+}
 
-func (c *PostgresClient) GetSongByID(id uint32) (Song, bool, error) { return c.GetSong("id", id) }
-func (c *PostgresClient) GetSongByYTID(id string) (Song, bool, error) { return c.GetSong("ytID", id) }
-func (c *PostgresClient) GetSongByKey(k string) (Song, bool, error) { return c.GetSong("key", k) }
+func (c *PostgresClient) GetSongByYTID(id string) (Song, bool, error) { 
+	return c.GetSong("ytID", id) 
+}
+
+func (c *PostgresClient) GetSongByKey(k string) (Song, bool, error) { 
+	return c.GetSong("key", k) 
+}
 
 func (c *PostgresClient) DeleteSongByID(id uint32) error {
-	_, err := c.db.Exec(`DELETE FROM songs WHERE id = $1`, id)
+	_, err := c.db.Exec(`DELETE FROM songs WHERE id = $1`, int64(id))
 	return err
 }
 

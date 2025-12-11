@@ -270,4 +270,31 @@ ok      shazoom/test    5.133s (YIPEE)
 
 - Fixed it using batch inserting (2000) at a time, still able to process 260s length song with 49k fingerprints in under 5 seconds!
 
-- Feeling proud indian army HEHE
+## 11th Dec 2025
+
+- Skipped a day so sorry for that :(
+- Will test the matching today by creating a small clip recorder and then try to match it with the query logic written. Let's see how today goes. 
+- If all goes well then I will be done with the backend logic. 
+- I will complete today by deciding on the frontend to use and then I will create a repo that will share both the front end and then backend. 
+- I will be using web sockets to relay information between backend and frontend. This is because HTTP servers have a big overhead (headers). Web sockets after the inital handshake are a very lightweight protocol. 
+- Web sockets maintain the connection so data transfer can happen back and forth in real time whereas HTTP creates a new connection for every request (request response model). 
+- Since our audio processing and sample recording will be done on the client side. We require a constant connection with the backend to relay information in order for a smooth user experience. 
+- For reasons stated, I have decided to go with **websockets**.
+
+- Failed in testing. Casting issue between my application layer and database layer. Trying to fix that.
+
+- Test Logs: 
+  === RUN   TestMatching
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:68: Recording for the next 10 seconds
+Total size of recorded sample data, 881574/nGenerated 5702 fingerprints from the recorded sample.
+successfully created postgreSQL client and created tables
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:126: Successfully found 3 matches, in 1.101181666s time
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:141: Failed to match with the expected title: Tum Se
+--- FAIL: TestMatching (11.48s)
+FAIL
+FAIL    shazoom/test    12.039s
+
+- Per observervation: The matching algo is not working, will need to pinpoint what's going wrong and fix it. 
+- TODO: Find out what's going wrong and where the matching is giving out the wrong results. (Could be the pipeline, could be the scoring logic.) DEBUG EVERYTHING!
+
+- Well I was hoping for this to work on the first try but HA!

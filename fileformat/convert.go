@@ -80,7 +80,6 @@ func convertToWAV(filePath string, opts ConversionOptions) (string, error) {
 	}
 
 	if opts.useTempFile {
-		//TODO: User utils.RenameFile when front-end exists!
 		err = os.Rename(targetFile, outputFile)
 				if err != nil {
 					return "", err
