@@ -140,31 +140,50 @@ func FindMatchesUsingFingerPrints(sample map[int64]uint32) ([]Match, time.Durati
 	And then the song with the most consistent time delta will gain the highest score.
 */
 func analyzeRelativeTiming(matches map[uint32][][2]uint32) map[uint32]float64 {
-	scores := make(map[uint32]float64)
+    scores := make(map[uint32]float64)
 
-	for songId, times := range matches {
-		differenceCounts := make(map[int32]int)
+    // Tune this based on your time units (anchorTime units)
+    const tolerance int32 = 3
 
-		for _, timePair := range times {
-			sampleTime := int32(timePair[0]) // sample provided time
-			dbTime := int32(timePair[1])     // matched pair in db time
-			difference := dbTime - sampleTime
+    for songId, times := range matches {
+        n := len(times)
+        if n == 0 {
+            continue
+        }
+        if n == 1 {
+            scores[songId] = 1
+            continue
+        }
 
-			// a little variation allowed (100ms)
-			differenceVariance := difference / 100
-			differenceCounts[differenceVariance]++
-		}
+        // collect deltas: dbTime - sampleTime
+        deltas := make([]int32, n)
+        for i, timePair := range times {
+            sampleTime := int32(timePair[0])
+            dbTime := int32(timePair[1])
+            deltas[i] = dbTime - sampleTime
+        }
 
-		// find max count from all the different 'differenceVariance'.
-		maxCount := 0
-		for _, count := range differenceCounts {
-			if count > maxCount {
-				maxCount = count
-			}
-		}
+        sort.Slice(deltas, func(i, j int) bool { return deltas[i] < deltas[j] })
 
-		scores[songId] = float64(maxCount)
-	}
+        // find longest streak where neighbouring deltas differ <= tolerance
+        maxStreak := 1
+        streak := 1
+        for i := 1; i < n; i++ {
+            if deltas[i]-deltas[i-1] <= tolerance {
+                streak++
+            } else {
+                if streak > maxStreak {
+                    maxStreak = streak
+                }
+                streak = 1
+            }
+        }
+        if streak > maxStreak {
+            maxStreak = streak
+        }
 
-	return scores
+        scores[songId] = float64(maxStreak)
+    }
+
+    return scores
 }

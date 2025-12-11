@@ -17,9 +17,7 @@ const (
 // The map key is now int64 to match the BIGINT column in the database.
 // The value remains models.Couple.
 func Fingerprint(peaks []Peak, songID uint32) map[int64]models.Couple {
-	// --- CHANGE: Map key is now int64 ---
 	fingerprints := map[int64]models.Couple{}
-
 	for i, anchor := range peaks {
 		// Search the "target zone" (next targetZoneSize peaks)
 		for j := i + 1; j < len(peaks) && j <= i+targetZoneSize; j++ {

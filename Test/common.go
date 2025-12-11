@@ -82,7 +82,7 @@ func LoadRealAudio(t *testing.T) ([]float64, int, float64) {
 	}
 	defer os.RemoveAll("tmp")
 
-	path := GetTestPath("testdata/sample2.mp3")
+	path := GetTestPath("testdata/sample3.mp3")
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		t.Fatalf("Test file does not exist: %s", path)

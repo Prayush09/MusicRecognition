@@ -64,7 +64,7 @@ func TestNewPostgresClient(t *testing.T) {
 	// 1. Registering a song to DB, then storing Fingerprints with songId to DB
 	// ----------------------------------------------------------------------
 
-	songArtist := "Arpit Bala"
+	songArtist := "Sufr"
 	songName := "Bargad"
 	ytId := "https://www.youtube.com/watch?v=jfjXJpUNayg"
 
