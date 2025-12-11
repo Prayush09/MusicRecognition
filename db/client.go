@@ -9,11 +9,7 @@ import (
 
 type DBClient interface {
 	Close() error
-
-	// UPDATED: Accepts int64 keys for hashes to match Postgres BIGINT
 	StoreFingerprints(fingerprints map[int64]models.Couple) error
-
-	// UPDATED: Accepts []int64 and returns map[int64]... to match Postgres BIGINT
 	GetCouples(addresses []int64) (map[int64][]models.Couple, error)
 
 	TotalSongs() (int, error)
@@ -70,6 +66,5 @@ func NewDBClient() (DBClient, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require",
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
-	// Note: We are calling the NewPostgresClient directly as before, assuming it implements DBClient
 	return NewPostgresClient(dsn)
 }

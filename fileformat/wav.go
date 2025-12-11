@@ -186,10 +186,7 @@ func WavBytesToSample(data []byte) ([]float64, error) {
 	output := make([]float64, numSamples)
 
 	for i := 0; i < len(data); i += 2 {
-		// Interpret bytes as a 16-bit signed integer (little-endian)
 		sample := int16(binary.LittleEndian.Uint16(data[i : i+2]))
-
-		// Scale the sample to the range [-1, 1]
 		output[i/2] = float64(sample) / 32768.0
 	}
 

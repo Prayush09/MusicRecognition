@@ -297,14 +297,19 @@ FAIL    shazoom/test    12.039s
 - Per observervation: The matching algo is not working, will need to pinpoint what's going wrong and fix it. 
 - TODO: Find out what's going wrong and where the matching is giving out the wrong results. (Could be the pipeline, could be the scoring logic.) DEBUG EVERYTHING!
 
-- Well I was hoping for this to work on the first try but HA!
+- Well I GOT IT TO WORK! SO HAPPY !!!
 
-TODO:
-1. Database Cleanliness,"Add client.DeleteCollection (""fingerprints"") to core_test.go before indexing.",[ ]
-2. Indexing Verification,Log the registered Song ID (TEST_SONG_ID) and the title used in the test's client.RegisterSong.,[ ]
-3. Assertion Verification,"Double-check the expected title string in the assertion (Failed to match with the expected title: ""Tum Se"") exactly matches the string used in Task 2.",[ ]
-4. Fingerprint Consistency,Temporarily log the first 5 generated int64 hashes from the audio sample. Rerun the test and confirm the hashes are identical across runs.,[ ]
-5. Retrieval Ratio Check,"In FindMatchesUsingFingerPrints, log len(addresses) (queried hashes) vs. len(m) (retrieved unique hashes). Low ratio points to poor indexing.",[ ]
-6. Analyze Scored Candidates,"In FindMatchesUsingFingerPrints, print the calculated raw scores (maxCount before normalization) for the top 3 Song IDs found in the matches map.",[ ]
-7. Consistency Ratio Implementation,"CRITICAL FIX: In analyzeRelativeTiming, change the score calculation to: scores[songId] = float64(maxCount) / float64(len(times)).",[ ]
-8. Sort Verification,"After sorting selectedCandidates, log the SongTitle and Score of the candidates ranked #1 and #2 to confirm the highest score is still leading to the wrong title.", [ ]
+- TEST LOG: 
+=== RUN   TestMatching
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:54: Recording for the next 10 seconds (Fresh Sample)...
+Total size of recorded sample  881574
+Generated 867 fingerprints from the recorded sample.
+successfully created postgreSQL client and created tables
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:115: Successfully found 3 matches, in 925.90925ms time
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:142: SUCCESS: Matched 'Le Aaunga' by Arijit singh (Score: 18.00)
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:99: Cleanup: Deleted reformatted .wav file
+    /Users/prayushgiri/Projects/Shazm Music Algorithm Project/test/match_test.go:89: Cleanup: Deleted raw_recording.wav
+--- PASS: TestMatching (11.33s)
+PASS
+ok      shazoom/test    11.876s
+

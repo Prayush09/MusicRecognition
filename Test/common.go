@@ -59,8 +59,6 @@ func TestProcessRecording(t *testing.T, recData models.RecordData, wavBytes []by
 		t.Fatal("ProcessRecording returned zero samples")
 	}
 
-	// Verify the duration makes sense
-	// With 44100 Hz sample rate, samples should roughly match duration
 	expectedSamplesApprox := int(recData.Duration * 44100)
 	tolerance := 0.1 //  10% tolerance
 

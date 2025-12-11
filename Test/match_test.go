@@ -1,161 +1,144 @@
 package core_test
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"os"
-	"path/filepath"
-	"shazoom/core"
-	"shazoom/fileformat"
-	"sort"
-	"sync"
-	"testing"
-	"time"
+    "bytes"
+    "encoding/binary"
+    "fmt"
+    "os"
+    "path/filepath"
+    "shazoom/core"
+    "shazoom/fileformat"
+    "sort"
+    "sync"
+    "testing"
+    "time"
 
-	"github.com/gordonklaus/portaudio"
+    "github.com/gordonklaus/portaudio"
 )
-
-//-----------------------------------------------------------------------
-// 6. Match Test
-//-----------------------------------------------------------------------
 
 const (
-	sampleRate = 44100
-	Channels   = 1 //mono
+    sampleRate = 44100
+    Channels   = 1
 )
 
-// return type: map[uint32]uint32
 func recordSample(t *testing.T) []byte {
-	var mutex sync.Mutex
-	var audioBytes []byte
+    var mutex sync.Mutex
+    var audioBytes []byte
 
-	err := portaudio.Initialize()
-	if err != nil {
-		t.Fatalf("Could not initialize portaudio: %v", err)
-	}
+    err := portaudio.Initialize()
+    if err != nil {
+        t.Fatalf("Could not initialize portaudio: %v", err)
+    }
 
-	defer portaudio.Terminate()
+    defer portaudio.Terminate()
 
-	callback := func(in []int16) {
-		buffer := new(bytes.Buffer)
-		err := binary.Write(buffer, binary.LittleEndian, in)
-		if err != nil {
-			t.Logf("Error writing int16 to buffer: %v", err)
-			return
-		}
+    callback := func(in []int16) {
+        buffer := new(bytes.Buffer)
+        err := binary.Write(buffer, binary.LittleEndian, in)
+        if err != nil {
+            t.Logf("Error writing int16 to buffer: %v", err)
+            return
+        }
 
-		mutex.Lock()
-		audioBytes = append(audioBytes, buffer.Bytes()...)
-		mutex.Unlock()
-	}
+        mutex.Lock()
+        audioBytes = append(audioBytes, buffer.Bytes()...)
+        mutex.Unlock()
+    }
 
-	stream, err := portaudio.OpenDefaultStream(Channels, 0, sampleRate, 0, callback)
-	if err != nil {
-		t.Fatalf("Failed to initalize stream: %v", err)
-	}
-	defer stream.Close()
+    stream, err := portaudio.OpenDefaultStream(Channels, 0, sampleRate, 0, callback)
+    if err != nil {
+        t.Fatalf("Failed to initalize stream: %v", err)
+    }
+    defer stream.Close()
 
-	// start recording
-	t.Log("Recording for the next 10 seconds (Fresh Sample)...")
-	err = stream.Start()
-	if err != nil {
-		t.Fatalf("Stream failed to start recording: %v", err)
-	}
+    t.Log("Recording for the next 10 seconds (Fresh Sample)...")
+    err = stream.Start()
+    if err != nil {
+        t.Fatalf("Stream failed to start recording: %v", err)
+    }
 
-	// Keep recording until time is up
-	time.Sleep(10 * time.Second)
+    time.Sleep(10 * time.Second)
 
-	err = stream.Stop()
-	if err != nil {
-		t.Fatalf("error occured while closing stream: %v", err)
-	}
+    err = stream.Stop()
+    if err != nil {
+        t.Fatalf("error occured while closing stream: %v", err)
+    }
 
-	fmt.Printf("Total size of recorded sample  %d\n", len(audioBytes))
+    fmt.Printf("Total size of recorded sample  %d\n", len(audioBytes))
 
-	return audioBytes
+    return audioBytes
 }
 
 func TestMatching(t *testing.T) {
-	// 1. Force a fresh microphone recording
-	audioBytes := recordSample(t)
+    audioBytes := recordSample(t)
 
-	// Define constants and paths
-	const BITS_PER_SAMPLE = 16
-	const CHANNELS = 1
-	tempDir := t.TempDir() // Creates a unique, fresh directory for this specific run
-	rawWavPath := filepath.Join(tempDir, "raw_recording.wav")
+    const BITS_PER_SAMPLE = 16
+    const CHANNELS = 1
+    tempDir := t.TempDir()
+    rawWavPath := filepath.Join(tempDir, "raw_recording.wav")
 
-	// 2. Write the raw bytes to a file using the existing utility
-	err := fileformat.WriteWavFile(rawWavPath, audioBytes, sampleRate, CHANNELS, BITS_PER_SAMPLE)
-	if err != nil {
-		t.Fatalf("Failed to write raw WAV file: %v", err)
-	}
+    err := fileformat.WriteWavFile(rawWavPath, audioBytes, sampleRate, CHANNELS, BITS_PER_SAMPLE)
+    if err != nil {
+        t.Fatalf("Failed to write raw WAV file: %v", err)
+    }
 
-	// [CLEANUP] Clear the memory variable now that it's on disk
-	audioBytes = nil
+    audioBytes = nil
 
-	// [CLEANUP] Ensure the raw file is deleted when the test finishes
-	defer func() {
-		os.Remove(rawWavPath)
-		t.Log("Cleanup: Deleted raw_recording.wav")
-	}()
+    defer func() {
+        os.Remove(rawWavPath)
+        t.Log("Cleanup: Deleted raw_recording.wav")
+    }()
 
-	// 3. Reformat the WAV file (ensure full standard compliance, Mono/44100Hz)
-	reformatedWavFile, err := fileformat.ReformatWav(rawWavPath, CHANNELS)
-	if err != nil {
-		t.Fatalf("Failed to reformat WAV: %v", err)
-	}
+    reformatedWavFile, err := fileformat.ReformatWav(rawWavPath, CHANNELS)
+    if err != nil {
+        t.Fatalf("Failed to reformat WAV: %v", err)
+    }
 
-	// [CLEANUP] Ensure the reformatted file is deleted when the test finishes
-	defer func() {
-		os.Remove(reformatedWavFile)
-		t.Log("Cleanup: Deleted reformatted .wav file")
-	}()
+    defer func() {
+        os.Remove(reformatedWavFile)
+        t.Log("Cleanup: Deleted reformatted .wav file")
+    }()
 
-	// 4. Read the reformatted WAV data back into []float64 (where normalization happens)
-	wavInfo, err := fileformat.ReadWavInfo(reformatedWavFile)
-	if err != nil {
-		t.Fatalf("Failed to read reformatted WAV info: %v", err)
-	}
+    wavInfo, err := fileformat.ReadWavInfo(reformatedWavFile)
+    if err != nil {
+        t.Fatalf("Failed to read reformatted WAV info: %v", err)
+    }
 
-	finalSamples := wavInfo.LeftChannelSamples
-	audioDuration := float64(len(finalSamples)) / float64(sampleRate)
+    finalSamples := wavInfo.LeftChannelSamples
+    audioDuration := float64(len(finalSamples)) / float64(sampleRate)
 
-	matches, matchTime, err := core.FindMatches(finalSamples, audioDuration, sampleRate)
-	if err != nil {
-		t.Fatalf("An error occurred while finding matches: %v", err)
-	}
+    matches, matchTime, err := core.FindMatches(finalSamples, audioDuration, sampleRate)
+    if err != nil {
+        t.Fatalf("An error occurred while finding matches: %v", err)
+    }
 
-	t.Logf("Successfully found %v matches, in %v time", len(matches), matchTime)
+    t.Logf("Successfully found %v matches, in %v time", len(matches), matchTime)
 
-	// Sort the matches in descending order using score
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].Score > matches[j].Score
-	})
+    sort.Slice(matches, func(i, j int) bool {
+        return matches[i].Score > matches[j].Score
+    })
 
-	if len(matches) == 0 {
-		t.Fatal("No matches found in the database")
-	}
+    if len(matches) == 0 {
+        t.Fatal("No matches found in the database")
+    }
 
-	const expectedTitle = "Bargad"
-	match := matches[0]
+    const expectedTitle = "Le Aaunga"
+    match := matches[0]
 
-	// Helper to print debug info safely even if fewer than 3 matches exist
-	printMatchDebug := func(idx int) string {
-		if idx < len(matches) {
-			return fmt.Sprintf("Title: %s, Score: %.2f", matches[idx].SongTitle, matches[idx].Score)
-		}
-		return "N/A"
-	}
+    printMatchDebug := func(idx int) string {
+        if idx < len(matches) {
+            return fmt.Sprintf("Title: %s, Score: %.2f", matches[idx].SongTitle, matches[idx].Score)
+        }
+        return "N/A"
+    }
 
-	if expectedTitle != match.SongTitle {
-		t.Fatalf("\nFailed to match with the expected title: '%s' != '%s'\n|| Top 3 Candidates:\n1. %s\n2. %s\n3. %s\n",
-			expectedTitle, match.SongTitle,
-			printMatchDebug(0),
-			printMatchDebug(1),
-			printMatchDebug(2))
-	} else {
-		t.Logf("SUCCESS: Matched '%s' by %s (Score: %.2f)", match.SongTitle, match.SongArtist, match.Score)
-	}
+    if expectedTitle != match.SongTitle {
+        t.Fatalf("\nFailed to match with the expected title: '%s' != '%s'\n|| Top 3 Candidates:\n1. %s\n2. %s\n3. %s\n",
+            expectedTitle, match.SongTitle,
+            printMatchDebug(0),
+            printMatchDebug(1),
+            printMatchDebug(2))
+    } else {
+        t.Logf("SUCCESS: Matched '%s' by %s (Score: %.2f)", match.SongTitle, match.SongArtist, match.Score)
+    }
 }
